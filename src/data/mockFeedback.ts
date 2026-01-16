@@ -16,152 +16,83 @@ export interface FeedbackItem {
   resolved: boolean;
 }
 
-export const mockFeedback: FeedbackItem[] = [
-  {
-    id: '1',
-    source: 'support',
-    title: 'API rate limiting is too aggressive',
-    content: 'We hit rate limits even with minimal traffic. This is blocking our production deployment. Need urgent review of our limits.',
-    sentiment: 'negative',
-    urgency: 'critical',
-    category: 'performance',
-    timestamp: new Date('2024-01-15T10:30:00'),
-    author: 'Enterprise Client',
-    resolved: false,
-  },
-  {
-    id: '2',
-    source: 'discord',
-    title: 'Workers AI is amazing!',
-    content: 'Just migrated from AWS Lambda and the cold start improvement is incredible. Love the edge computing approach!',
-    sentiment: 'positive',
-    urgency: 'low',
-    category: 'feature',
-    timestamp: new Date('2024-01-15T09:15:00'),
-    author: 'DevCommunity#1234',
-    resolved: true,
-  },
-  {
-    id: '3',
-    source: 'github',
-    title: 'R2 bucket CORS configuration not working',
-    content: 'Following the docs exactly but still getting CORS errors. Tested in Chrome and Firefox. Attaching reproduction repo.',
-    sentiment: 'negative',
-    urgency: 'high',
-    category: 'bug',
-    timestamp: new Date('2024-01-15T08:45:00'),
-    author: 'jsmith-dev',
-    resolved: false,
-  },
-  {
-    id: '4',
-    source: 'twitter',
-    title: 'Documentation needs examples',
-    content: 'The Workers docs are comprehensive but lack real-world examples. Would love to see more tutorials.',
-    sentiment: 'neutral',
-    urgency: 'medium',
-    category: 'documentation',
-    timestamp: new Date('2024-01-14T16:20:00'),
-    author: '@clouddev_sarah',
-    resolved: false,
-  },
-  {
-    id: '5',
-    source: 'email',
-    title: 'Pricing tier confusion',
-    content: 'Having trouble understanding the difference between Pro and Business plans. The comparison table is confusing.',
-    sentiment: 'neutral',
-    urgency: 'medium',
-    category: 'pricing',
-    timestamp: new Date('2024-01-14T14:00:00'),
-    author: 'sales-lead@company.com',
-    resolved: true,
-  },
-  {
-    id: '6',
-    source: 'forum',
-    title: 'Dashboard UX improvement suggestion',
-    content: 'Would be great to have a dark mode toggle in the header instead of buried in settings. Small but impactful change.',
-    sentiment: 'positive',
-    urgency: 'low',
-    category: 'ux',
-    timestamp: new Date('2024-01-14T11:30:00'),
-    author: 'PowerUser99',
-    resolved: false,
-  },
-  {
-    id: '7',
-    source: 'support',
-    title: 'SSL certificate not auto-renewing',
-    content: 'Our custom domain SSL expired without warning. Site was down for 2 hours. Need immediate escalation.',
-    sentiment: 'negative',
-    urgency: 'critical',
-    category: 'bug',
-    timestamp: new Date('2024-01-14T03:45:00'),
-    author: 'CTO @ StartupX',
-    resolved: true,
-  },
-  {
-    id: '8',
-    source: 'github',
-    title: 'Feature request: Cron trigger improvements',
-    content: 'Would love to see sub-minute cron scheduling and better logging for scheduled workers.',
-    sentiment: 'positive',
-    urgency: 'low',
-    category: 'feature',
-    timestamp: new Date('2024-01-13T22:10:00'),
-    author: 'automation-guru',
-    resolved: false,
-  },
-  {
-    id: '9',
-    source: 'discord',
-    title: 'KV storage latency spikes',
-    content: 'Seeing intermittent latency spikes (500ms+) on KV reads in Asia Pacific region. Anyone else experiencing this?',
-    sentiment: 'negative',
-    urgency: 'high',
-    category: 'performance',
-    timestamp: new Date('2024-01-13T19:00:00'),
-    author: 'APACDev#5678',
-    resolved: false,
-  },
-  {
-    id: '10',
-    source: 'email',
-    title: 'Great onboarding experience',
-    content: 'Just wanted to say the new onboarding flow is much improved. Got my first Worker deployed in under 10 minutes!',
-    sentiment: 'positive',
-    urgency: 'low',
-    category: 'ux',
-    timestamp: new Date('2024-01-13T15:30:00'),
-    author: 'new-customer@techcorp.io',
-    resolved: true,
-  },
-  {
-    id: '11',
-    source: 'twitter',
-    title: 'Workers AI model selection limited',
-    content: 'Would love to see more LLM options in Workers AI. Current selection is good but competitors have more variety.',
-    sentiment: 'neutral',
-    urgency: 'medium',
-    category: 'feature',
-    timestamp: new Date('2024-01-13T12:45:00'),
-    author: '@ai_enthusiast',
-    resolved: false,
-  },
-  {
-    id: '12',
-    source: 'forum',
-    title: 'Pages deployment failing silently',
-    content: 'Deployments sometimes fail without error messages. Have to check build logs manually to find issues.',
-    sentiment: 'negative',
-    urgency: 'high',
-    category: 'bug',
-    timestamp: new Date('2024-01-12T20:00:00'),
-    author: 'WebDevPro',
-    resolved: false,
-  },
+const sources: FeedbackSource[] = ['support', 'discord', 'github', 'twitter', 'email', 'forum'];
+const categories: Category[] = ['bug', 'feature', 'performance', 'ux', 'pricing', 'documentation'];
+const sentiments: Sentiment[] = ['positive', 'negative', 'neutral'];
+const urgencies: Urgency[] = ['critical', 'high', 'medium', 'low'];
+
+const sourceTopics: Record<FeedbackSource, string[]> = {
+  support: ['rate limit', 'billing', 'DNS', 'WAF', 'SSL', 'account access', 'outage', 'API auth'],
+  discord: ['Workers', 'KV', 'R2', 'Pages', 'Durable Objects', 'Queues', 'D1', 'Turnstile'],
+  github: ['CLI', 'docs', 'API', 'SDK', 'example repo', 'CI setup', 'TypeScript types', 'release notes'],
+  twitter: ['product launch', 'docs', 'pricing', 'performance', 'status', 'feature request', 'benchmark', 'tutorial'],
+  email: ['sales question', 'invoice', 'plan upgrade', 'security review', 'SLA', 'procurement', 'support ticket', 'renewal'],
+  forum: ['best practices', 'migration', 'how-to', 'troubleshooting', 'case study', 'template', 'workflow', 'integration'],
+};
+
+const categoryTopics: Record<Category, string[]> = {
+  bug: ['regression', 'error', 'crash', 'timeout', 'broken link', 'misconfiguration', 'unexpected behavior', 'edge case'],
+  feature: ['request', 'enhancement', 'integration', 'automation', 'dashboard', 'API endpoint', 'flag', 'webhook'],
+  performance: ['latency', 'throughput', 'cold start', 'cache hit rate', 'build time', 'query time', 'bandwidth'],
+  ux: ['navigation', 'onboarding', 'dashboard layout', 'search', 'filters', 'settings', 'tooltip copy', 'empty state'],
+  pricing: ['tier limit', 'overage', 'usage reporting', 'credits', 'discount', 'billing alert', 'seat count', 'invoice clarity'],
+  documentation: ['guide', 'example', 'reference', 'migration doc', 'glossary', 'FAQ', 'tutorial', 'API schema'],
+};
+
+const contentTemplates = [
+  'Noticed {topic} issues when using {surface}. This blocks our rollout and needs a fix.',
+  'Would love improvements to {surface} around {topic}. Happy to share more context.',
+  'We tried {surface} for {topic} and ran into unexpected behavior. Repro steps available.',
+  'The current flow in {surface} feels confusing for {topic}. Suggest a clearer path.',
+  'Great progress on {surface}, but {topic} still feels rough at scale.',
+  'Please add better visibility for {topic} in {surface}; logs are hard to trace.',
+  'Comparing with competitors, {surface} for {topic} could be stronger.',
+  'Our team relies on {surface}; {topic} is the main blocker right now.',
 ];
+
+const sourceAuthors: Record<FeedbackSource, string[]> = {
+  support: ['Enterprise Client', 'Ops Lead', 'IT Manager', 'Site Reliability', 'CTO', 'Platform Team'],
+  discord: ['DevCommunity#1234', 'EdgeWizard#4821', 'APACDev#5678', 'CFfan#9001', 'HackNight#3322'],
+  github: ['jsmith-dev', 'automation-guru', 'octo-user', 'build-bot', 'api-tester', 'oss-maintainer'],
+  twitter: ['@clouddev_sarah', '@ai_enthusiast', '@edge_architect', '@serverless_jane', '@perf_ninja'],
+  email: ['sales-lead@company.com', 'cto@startup.io', 'finance@corp.com', 'security@enterprise.com', 'it@agency.com'],
+  forum: ['PowerUser99', 'WebDevPro', 'OpsExplorer', 'TemplateCrafter', 'InfraMaven', 'BuilderKim'],
+};
+
+const buildMockFeedback = (): FeedbackItem[] => {
+  const items: FeedbackItem[] = [];
+  const startDate = new Date('2024-02-01T12:00:00Z').getTime();
+  const entryCount = 200;
+
+  sources.forEach((source) => {
+    for (let i = 1; i <= entryCount; i += 1) {
+      const category = categories[(i + source.length) % categories.length];
+      const sentiment = sentiments[(i + category.length) % sentiments.length];
+      const urgency = urgencies[(i + sourceTopics[source][0].length) % urgencies.length];
+      const topic = categoryTopics[category][i % categoryTopics[category].length];
+      const surface = sourceTopics[source][i % sourceTopics[source].length];
+      const template = contentTemplates[i % contentTemplates.length];
+      const author = sourceAuthors[source][i % sourceAuthors[source].length];
+
+      items.push({
+        id: `${source}-${i}`,
+        source,
+        title: `${surface} ${topic} ${i}`.replace('  ', ' '),
+        content: template.replace('{topic}', topic).replace('{surface}', surface),
+        sentiment,
+        urgency,
+        category,
+        timestamp: new Date(startDate - (items.length * 37 + i * 13) * 60000),
+        author,
+        resolved: i % 5 === 0 || sentiment === 'positive',
+      });
+    }
+  });
+
+  return items;
+};
+
+export const mockFeedback: FeedbackItem[] = buildMockFeedback();
 
 export const sourceConfig: Record<FeedbackSource, { label: string; color: string; icon: string }> = {
   support: { label: 'Support', color: 'bg-info', icon: 'headphones' },
