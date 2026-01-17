@@ -8,13 +8,14 @@ import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { IssueTrendModal } from '@/components/dashboard/IssueTrendModal';
+import { TrendsCard } from '@/components/dashboard/TrendsCard';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 import { formatPercent } from '@/lib/kpiUtils';
 import { AlertTriangle } from 'lucide-react';
 
 const Index = () => {
-  const [feedback, setFeedback] = useState<FeedbackItem[]>(mockFeedback);
+  const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
   const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
@@ -139,6 +140,16 @@ const Index = () => {
     [filteredFeedback]
   );
 
+  const topIssueType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredFeedback.forEach((item) => {
+      const issueType = item.issueType ?? 'unknown';
+      counts[issueType] = (counts[issueType] ?? 0) + 1;
+    });
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return entries[0]?.[0] ?? null;
+  }, [filteredFeedback]);
+
   const handleThemeSelect = (themeId: string) => {
     const params = new URLSearchParams(window.location.search);
     params.set('theme_id', themeId);
@@ -241,27 +252,44 @@ const Index = () => {
                   value={criticalPercent}
                   icon={AlertTriangle}
                   tooltip="Computed as unresolved items where urgency is critical within the current time window."
-                  subtext={
-                    <span>
-                      <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
-                      <span className="font-semibold text-foreground">unresolved</span> critical tickets require
-                      immediate attention.
-                    </span>
-                  }
                   className="h-full"
-                />
+                >
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
+                    <span className="font-semibold text-foreground">unresolved</span> critical tickets require
+                    immediate attention.
+                  </p>
+                </KpiCard>
                 <div className="h-full">{issueTypesCard}</div>
               </div>
             )}
             secondaryCard={
-              <EmergingThemesCard
-                themes={emergingThemes}
-                onSelectTheme={handleThemeSelect}
-                onViewTrend={handleViewTrend}
+              <TrendsCard
+                entries={feedbackForEmerging}
+                issueTypeId={topIssueType}
+                issueTypeLabel={
+                  topIssueType
+                    ? issueTypeConfig[topIssueType as keyof typeof issueTypeConfig]?.label ??
+                      topIssueType
+                    : null
+                }
+                onTimeRangeSelect={(range) => {
+                  markFiltering();
+                  setCustomRange(normalizeRange(range));
+                  setActiveTime('custom');
+                }}
               />
             }
-            extraRightCard={<AIInsights feedback={filteredFeedback} />}
           />
+
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            <EmergingThemesCard
+              themes={emergingThemes}
+              onSelectTheme={handleThemeSelect}
+              onViewTrend={handleViewTrend}
+            />
+            <AIInsights feedback={filteredFeedback} />
+          </div>
 
           {/* Charts Row */}
 

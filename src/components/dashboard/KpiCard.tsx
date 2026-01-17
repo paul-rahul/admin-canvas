@@ -36,7 +36,7 @@ export function KpiCard({
   return (
     <div className={cn("glass rounded-xl p-6 shadow-card min-w-0 h-full flex flex-col", className)}>
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-2">
+        <div className="space-y-1 w-full">
           <div className="flex items-center gap-2">
             {Icon && (
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">

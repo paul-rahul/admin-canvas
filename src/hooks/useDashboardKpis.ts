@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { EntriesResponse, Theme, Trends } from '@/lib/apiClient';
+import type { EntriesResponse } from '@/lib/apiClient';
 import { apiClient } from '@/lib/apiClient';
 import {
   KpiFilters,
   applyEntryFilters,
-  computeCriticalPercentage,
-  computeNegativePercentage,
   computeTopIssueType,
-  deriveThemesFromEntries,
 } from '@/lib/kpiUtils';
-import { computeEmergingThemes } from '@/utils/emergingThemes';
 
 type KpiData = {
   totalEntries: number | null;
@@ -22,8 +18,6 @@ type KpiData = {
 
 export const useDashboardKpis = (filters: KpiFilters, entriesOverride?: EntriesResponse | null) => {
   const [entries, setEntries] = useState<EntriesResponse | null>(null);
-  const [themes, setThemes] = useState<Theme[] | null>(null);
-  const [trends, setTrends] = useState<Trends | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,19 +47,12 @@ export const useDashboardKpis = (filters: KpiFilters, entriesOverride?: EntriesR
           page_size: '1000',
           search: filters.search ?? undefined,
         });
-        const themesResponse = await apiClient.getThemes();
-        const trendsResponse = await apiClient.getTrends();
-
         if (!isMounted) return;
         setEntries(entriesResponse);
-        setThemes(themesResponse);
-        setTrends(trendsResponse);
       } catch (err) {
         if (!isMounted) return;
         setError('Failed to load KPI data');
         setEntries(null);
-        setThemes(null);
-        setTrends(null);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -82,8 +69,6 @@ export const useDashboardKpis = (filters: KpiFilters, entriesOverride?: EntriesR
   const kpis = useMemo<KpiData>(() => {
     const entryItems = entries?.items ?? [];
     const filteredEntries = applyEntryFilters(entryItems, filters);
-    const derivedThemes = filteredEntries.length ? deriveThemesFromEntries(filteredEntries) : [];
-    const resolvedThemes = themes ?? (derivedThemes.length ? derivedThemes : null);
     const hasFilters =
       Boolean(filters.from) ||
       Boolean(filters.to) ||
@@ -95,22 +80,17 @@ export const useDashboardKpis = (filters: KpiFilters, entriesOverride?: EntriesR
     const totalEntries = hasFilters
       ? filteredEntries.length
       : entries?.total ?? filteredEntries.length ?? null;
-    const themesForKpis = hasFilters ? derivedThemes : resolvedThemes;
-    const totalThemes = themesForKpis?.length ?? null;
-    const negativePercent = computeNegativePercentage(filteredEntries, themesForKpis);
-    const criticalPercent = computeCriticalPercentage(filteredEntries, themesForKpis);
     const topIssueType = computeTopIssueType(filteredEntries);
-    const emergingThemes = computeEmergingThemes(filteredEntries, themesForKpis ?? [], new Date(), 7);
 
     return {
       totalEntries,
-      totalThemes,
-      negativePercent,
-      criticalPercent,
+      totalThemes: null,
+      negativePercent: null,
+      criticalPercent: null,
       topIssueType,
-      emergingThemes: emergingThemes.length ? emergingThemes.length : null,
+      emergingThemes: null,
     };
-  }, [entries, themes, trends, filters]);
+  }, [entries, filters]);
 
   return { kpis, isLoading, error };
 };
