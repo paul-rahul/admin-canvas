@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '@/components/dashboard/Header';
 import { FilterBar } from '@/components/dashboard/FilterBar';
 import { FeedbackTable } from '@/components/dashboard/FeedbackTable';
@@ -25,6 +25,8 @@ const Index = () => {
   });
   const [trendThemeId, setTrendThemeId] = useState<string | null>(null);
   const [isTrendOpen, setIsTrendOpen] = useState(false);
+  const [isFiltering, setIsFiltering] = useState(false);
+  const filterTimerRef = useRef<number | null>(null);
   const defaultCustomRange = () => {
     const now = new Date();
     return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), to: now };
@@ -35,6 +37,17 @@ const Index = () => {
       return { from: range.to, to: range.from };
     }
     return range;
+  };
+
+  const markFiltering = () => {
+    if (filterTimerRef.current) {
+      window.clearTimeout(filterTimerRef.current);
+    }
+    setIsFiltering(true);
+    filterTimerRef.current = window.setTimeout(() => {
+      setIsFiltering(false);
+      filterTimerRef.current = null;
+    }, 250);
   };
 
   const filteredFeedback = useMemo(() => {
@@ -162,6 +175,14 @@ const Index = () => {
     void loadFeedback();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (filterTimerRef.current) {
+        window.clearTimeout(filterTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleRefresh = () => {
     void loadFeedback();
   };
@@ -191,6 +212,7 @@ const Index = () => {
             activeTime={activeTime}
             onSourceChange={setActiveSource}
             onTimeChange={(time) => {
+              markFiltering();
               setActiveTime(time);
               if (time === 'custom') {
                 setCustomRange(defaultCustomRange());
@@ -198,9 +220,11 @@ const Index = () => {
             }}
             customRange={customRange}
             onCustomRangeChange={(range) => {
+              markFiltering();
               setCustomRange(normalizeRange(range));
               setActiveTime('custom');
             }}
+            isFiltering={isFiltering}
           />
 
           {/* KPI Strip */}
@@ -264,6 +288,7 @@ const Index = () => {
             : null
         }
         onTimeRangeSelect={(range) => {
+          markFiltering();
           setCustomRange(normalizeRange(range));
           setActiveTime('custom');
         }}

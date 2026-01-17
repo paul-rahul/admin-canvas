@@ -58,19 +58,32 @@ export function IssueTrendModal({
   onTimeRangeSelect,
 }: IssueTrendModalProps) {
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('7d');
-  const [selectedRange, setSelectedRange] = useState<{ startIndex: number; endIndex: number } | null>(
-    null
-  );
-  const [dragRange, setDragRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
-  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
   const chartRef = useRef<HTMLDivElement | null>(null);
-  const [chartWidth, setChartWidth] = useState(0);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const chartWidthRef = useRef(0);
+  const plotRectRef = useRef<{ left: number; width: number } | null>(null);
+  const dragStartIndexRef = useRef<number | null>(null);
+  const dragEndIndexRef = useRef<number | null>(null);
+  const isSelectingRef = useRef(false);
+  const dragPixelStartRef = useRef<number | null>(null);
+  const dragPixelEndRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const trendData = useMemo<TrendPoint[]>(() => {
     if (!issueTypeId) return [];
     const config = timeRanges[timeRange];
-    const now = Date.now();
-    const start = now - config.windowMs;
+    const now = new Date();
+    const alignedEnd = new Date(now);
+    if (config.bucketMs >= DAY_MS) {
+      alignedEnd.setHours(0, 0, 0, 0);
+      alignedEnd.setTime(alignedEnd.getTime() + DAY_MS);
+    } else {
+      alignedEnd.setMinutes(0, 0, 0);
+      alignedEnd.setTime(alignedEnd.getTime() + 60 * 60 * 1000);
+    }
+    const endMs = alignedEnd.getTime();
+    const start = endMs - config.windowMs;
     const bucketCount = Math.max(1, Math.ceil(config.windowMs / config.bucketMs));
 
     const buckets = Array.from({ length: bucketCount }, (_, index) => ({
@@ -83,7 +96,7 @@ export function IssueTrendModal({
     entries.forEach((entry) => {
       if (entry.issueType !== issueTypeId) return;
       const timestamp = entry.timestamp?.getTime?.() ?? null;
-      if (!timestamp || timestamp < start || timestamp > now) return;
+      if (!timestamp || timestamp < start || timestamp >= endMs) return;
       const bucketIndex = Math.min(
         buckets.length - 1,
         Math.max(0, Math.floor((timestamp - start) / config.bucketMs))
@@ -107,13 +120,25 @@ export function IssueTrendModal({
   }, [entries, issueTypeId, timeRange]);
 
   const hasData = trendData.some((point) => point.count > 0);
+
+  const derivedRange = useMemo(() => {
+    if (!selectedRangeMs || trendData.length === 0) return null;
+    const { from, to } = selectedRangeMs;
+    const windowStart = trendData[0]?.startMs ?? null;
+    const windowEnd = trendData[trendData.length - 1]?.endMs ?? null;
+    if (windowStart === null || windowEnd === null) return null;
+    if (from < windowStart || to > windowEnd) return null;
+    const startIndex = trendData.findIndex((point) => point.endMs >= from);
+    const endIndex = [...trendData].reverse().findIndex((point) => point.startMs <= to);
+    if (startIndex === -1 || endIndex === -1) return null;
+    const normalizedEndIndex = trendData.length - 1 - endIndex;
+    return { startIndex, endIndex: Math.max(startIndex, normalizedEndIndex) };
+  }, [selectedRangeMs, trendData]);
+
   const selectedRangeData = useMemo(() => {
-    if (!selectedRange || !trendData.length) return null;
-    const start = trendData[selectedRange.startIndex];
-    const end = trendData[selectedRange.endIndex];
-    if (!start || !end) return null;
-    return { startMs: start.startMs, endMs: end.endMs };
-  }, [selectedRange, trendData]);
+    if (!derivedRange || !selectedRangeMs) return null;
+    return { startMs: selectedRangeMs.from, endMs: selectedRangeMs.to };
+  }, [derivedRange, selectedRangeMs]);
 
   const summary = useMemo(() => {
     if (!selectedRangeData) return null;
@@ -126,8 +151,8 @@ export function IssueTrendModal({
 
     const total = entriesInRange.length;
     const bucketCount =
-      selectedRange && selectedRange.endIndex >= selectedRange.startIndex
-        ? selectedRange.endIndex - selectedRange.startIndex + 1
+      derivedRange && derivedRange.endIndex >= derivedRange.startIndex
+        ? derivedRange.endIndex - derivedRange.startIndex + 1
         : 0;
     const avgPerBucket = bucketCount ? total / bucketCount : 0;
 
@@ -151,26 +176,146 @@ export function IssueTrendModal({
       topSource,
       topIssueType,
     };
-  }, [selectedRange, selectedRangeData, summaryEntries]);
+  }, [derivedRange, selectedRangeData, summaryEntries]);
 
   useEffect(() => {
-    setSelectedRange(null);
-    setDragRange(null);
-    setIsSelecting(false);
+    dragStartIndexRef.current = null;
+    dragEndIndexRef.current = null;
+    isSelectingRef.current = false;
+    dragPixelStartRef.current = null;
+    dragPixelEndRef.current = null;
+    if (overlayRef.current) {
+      overlayRef.current.style.opacity = '0';
+    }
   }, [issueTypeId, timeRange]);
 
   useEffect(() => {
     if (!chartRef.current) return;
-    setChartWidth(chartRef.current.clientWidth);
+    chartWidthRef.current = chartRef.current.clientWidth;
+    const updatePlotRect = () => {
+      if (!chartRef.current) return;
+      const containerRect = chartRef.current.getBoundingClientRect();
+      const grid = chartRef.current.querySelector('.recharts-cartesian-grid') as HTMLElement | null;
+      if (grid) {
+        const gridRect = grid.getBoundingClientRect();
+        plotRectRef.current = {
+          left: Math.max(0, gridRect.left - containerRect.left),
+          width: Math.max(0, gridRect.width),
+        };
+      } else {
+        plotRectRef.current = { left: 0, width: containerRect.width };
+      }
+    };
+    updatePlotRect();
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
-        setChartWidth(entry.contentRect.width);
+        chartWidthRef.current = entry.contentRect.width;
+        updatePlotRect();
       }
     });
     observer.observe(chartRef.current);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
+  const updatePlotRect = () => {
+    if (!chartRef.current) return;
+    const containerRect = chartRef.current.getBoundingClientRect();
+    const grid = chartRef.current.querySelector('.recharts-cartesian-grid') as HTMLElement | null;
+    if (grid) {
+      const gridRect = grid.getBoundingClientRect();
+      plotRectRef.current = {
+        left: Math.max(0, gridRect.left - containerRect.left),
+        width: Math.max(0, gridRect.width),
+      };
+    } else {
+      plotRectRef.current = { left: 0, width: containerRect.width };
+    }
+  };
+
+  const updateOverlayByIndexRange = (startIndex: number, endIndex: number) => {
+    if (!overlayRef.current || trendData.length === 0) return;
+    const plotRect = plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0 };
+    const width = plotRect.width;
+    if (!width) return;
+    const start = Math.min(startIndex, endIndex);
+    const end = Math.max(startIndex, endIndex);
+    const bucketWidth = width / trendData.length;
+    const left = Math.max(plotRect.left, plotRect.left + (start - 0.5) * bucketWidth);
+    const right = Math.min(
+      plotRect.left + width,
+      plotRect.left + (end + 0.5) * bucketWidth
+    );
+    const overlayWidth = Math.max(1, right - left);
+    overlayRef.current.style.opacity = '1';
+    overlayRef.current.style.left = `${left}px`;
+    overlayRef.current.style.width = `${overlayWidth}px`;
+  };
+
+  const updateOverlayPixels = (startPx: number, endPx: number) => {
+    const plotRect = plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0 };
+    const plotWidth = plotRect.width;
+    if (!plotWidth) return;
+    const bucketWidth = plotWidth / trendData.length;
+    const startIndex = getIndexFromPixel(startPx, bucketWidth);
+    const endIndex = getIndexFromPixel(endPx, bucketWidth);
+    updateOverlayByIndexRange(startIndex, endIndex);
+  };
+
+  const updateOverlayByTimeRange = (from: number, to: number) => {
+    if (!derivedRange) return;
+    updateOverlayByIndexRange(derivedRange.startIndex, derivedRange.endIndex);
+  };
+
+  const getPlotMetrics = (clientX: number) => {
+    if (!chartRef.current) {
+      return { pixel: 0, plotWidth: 1 };
+    }
+    const rect = chartRef.current.getBoundingClientRect();
+    updatePlotRect();
+    const plotRect = plotRectRef.current ?? { left: 0, width: rect.width };
+    const plotWidth = Math.max(1, plotRect.width);
+    const pixel = Math.min(plotWidth, Math.max(0, clientX - rect.left - plotRect.left));
+    return { pixel, plotWidth };
+  };
+
+  const getIndexFromPixel = (pixel: number, bucketWidth: number) => {
+    const index = Math.floor(pixel / Math.max(1, bucketWidth) + 0.5);
+    return Math.min(trendData.length - 1, Math.max(0, index));
+  };
+
+  const hideOverlay = () => {
+    if (!overlayRef.current) return;
+    overlayRef.current.style.opacity = '0';
+  };
+
+  useEffect(() => {
+    if (!selectedRangeMs || !derivedRange) {
+      hideOverlay();
+      return;
+    }
+    updateOverlayByTimeRange(selectedRangeMs.from, selectedRangeMs.to);
+  }, [derivedRange, selectedRangeMs, trendData]);
+
+  useEffect(() => {
+    if (!selectedRangeMs || trendData.length === 0) return;
+    const { from, to } = selectedRangeMs;
+    const windowStart = trendData[0]?.startMs ?? null;
+    const windowEnd = trendData[trendData.length - 1]?.endMs ?? null;
+    if (windowStart === null || windowEnd === null) return;
+    if (from < windowStart || to > windowEnd) {
+      setSelectedRangeMs(null);
+      hideOverlay();
+    }
+  }, [selectedRangeMs, trendData]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -247,25 +392,6 @@ export function IssueTrendModal({
                   dot={false}
                   connectNulls
                 />
-                {(dragRange || selectedRange) && (() => {
-                  const range = dragRange ?? selectedRange;
-                  if (!range) return null;
-                  const startIndex = Math.min(range.startIndex, range.endIndex);
-                  const endIndex = Math.max(range.startIndex, range.endIndex);
-                  const startLabel = trendData[startIndex]?.label;
-                  const endLabel = trendData[endIndex]?.label;
-                  if (!startLabel || !endLabel) return null;
-                  return (
-                    <ReferenceArea
-                      x1={startLabel}
-                      x2={endLabel}
-                      stroke="hsl(var(--primary))"
-                      strokeOpacity={0.35}
-                      fill="hsl(var(--primary))"
-                      fillOpacity={0.2}
-                    />
-                  );
-                })()}
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -273,21 +399,13 @@ export function IssueTrendModal({
               No data available for this time range.
             </div>
           )}
-          {hasData && chartWidth > 0 && (dragRange || selectedRange) && (() => {
-            const range = dragRange ?? selectedRange;
-            if (!range || trendData.length === 0) return null;
-            const startIndex = Math.min(range.startIndex, range.endIndex);
-            const endIndex = Math.max(range.startIndex, range.endIndex);
-            const bucketWidth = chartWidth / trendData.length;
-            const left = startIndex * bucketWidth;
-            const width = (endIndex - startIndex + 1) * bucketWidth;
-            return (
-              <div
-                className="absolute inset-y-0 z-20 rounded-md border border-primary/50 bg-primary/15 pointer-events-none"
-                style={{ left, width }}
-              />
-            );
-          })()}
+          {hasData && (
+            <div
+              ref={overlayRef}
+              className="absolute inset-y-0 z-20 rounded-md border border-primary/50 pointer-events-none"
+              style={{ left: 0, width: 0, opacity: 0, backgroundColor: 'hsl(var(--primary) / 0.2)' }}
+            />
+          )}
           {hasData && (
             <div
               className="absolute inset-0 z-30 cursor-crosshair"
@@ -295,45 +413,85 @@ export function IssueTrendModal({
               onMouseDown={(event) => {
                 if (!chartRef.current || trendData.length === 0) return;
                 const rect = chartRef.current.getBoundingClientRect();
-                setChartWidth(rect.width);
-                const x = event.clientX - rect.left;
-                const ratio = Math.min(1, Math.max(0, x / rect.width));
-                const index = Math.round(ratio * (trendData.length - 1));
-                setIsSelecting(true);
-                setDragRange({ startIndex: index, endIndex: index });
+                chartWidthRef.current = rect.width;
+                const { pixel, plotWidth } = getPlotMetrics(event.clientX);
+                const bucketWidth = plotWidth / trendData.length;
+                const index = getIndexFromPixel(pixel, bucketWidth);
+                isSelectingRef.current = true;
+                dragStartIndexRef.current = index;
+                dragEndIndexRef.current = index;
+                dragPixelStartRef.current = pixel;
+                dragPixelEndRef.current = pixel;
+                updateOverlayPixels(pixel, pixel);
               }}
               onMouseMove={(event) => {
-                if (!isSelecting || !chartRef.current || trendData.length === 0) return;
+                if (!isSelectingRef.current || !chartRef.current || trendData.length === 0) return;
                 const rect = chartRef.current.getBoundingClientRect();
-                setChartWidth(rect.width);
-                const x = event.clientX - rect.left;
-                const ratio = Math.min(1, Math.max(0, x / rect.width));
-                const index = Math.round(ratio * (trendData.length - 1));
-                setDragRange((prev) => (prev ? { startIndex: prev.startIndex, endIndex: index } : null));
+                chartWidthRef.current = rect.width;
+                const { pixel, plotWidth } = getPlotMetrics(event.clientX);
+                const bucketWidth = plotWidth / trendData.length;
+                const index = getIndexFromPixel(pixel, bucketWidth);
+                if (dragStartIndexRef.current === null) return;
+                dragEndIndexRef.current = index;
+                dragPixelEndRef.current = pixel;
+                if (rafRef.current) return;
+                rafRef.current = requestAnimationFrame(() => {
+                  rafRef.current = null;
+                  if (dragPixelStartRef.current !== null && dragPixelEndRef.current !== null) {
+                    updateOverlayPixels(dragPixelStartRef.current, dragPixelEndRef.current);
+                  }
+                });
               }}
               onMouseUp={() => {
-                if (!dragRange || trendData.length === 0) {
-                  setIsSelecting(false);
+                if (
+                  dragStartIndexRef.current === null ||
+                  dragEndIndexRef.current === null ||
+                  trendData.length === 0
+                ) {
+                  isSelectingRef.current = false;
+                  hideOverlay();
                   return;
                 }
-                const startIndex = Math.min(dragRange.startIndex, dragRange.endIndex);
-                const endIndex = Math.max(dragRange.startIndex, dragRange.endIndex);
-                setSelectedRange({ startIndex, endIndex });
-                setDragRange(null);
-                setIsSelecting(false);
+                if (dragPixelStartRef.current === null || dragPixelEndRef.current === null) {
+                  isSelectingRef.current = false;
+                  hideOverlay();
+                  return;
+                }
+                const plotWidth = plotRectRef.current?.width ?? chartRef.current?.clientWidth ?? 1;
+                const bucketWidth = plotWidth / trendData.length;
+                const startIndex = getIndexFromPixel(
+                  Math.min(dragPixelStartRef.current, dragPixelEndRef.current),
+                  bucketWidth
+                );
+                const endIndex = getIndexFromPixel(
+                  Math.max(dragPixelStartRef.current, dragPixelEndRef.current),
+                  bucketWidth
+                );
+                dragStartIndexRef.current = null;
+                dragEndIndexRef.current = null;
+                dragPixelStartRef.current = null;
+                dragPixelEndRef.current = null;
+                isSelectingRef.current = false;
                 const startPoint = trendData[startIndex];
                 const endPoint = trendData[endIndex];
+                if (startPoint && endPoint) {
+                  setSelectedRangeMs({ from: startPoint.startMs, to: endPoint.endMs - 1 });
+                }
                 if (startPoint && endPoint && onTimeRangeSelect) {
                   onTimeRangeSelect({
                     from: new Date(startPoint.startMs),
-                    to: new Date(endPoint.endMs),
+                    to: new Date(endPoint.endMs - 1),
                   });
                 }
               }}
               onMouseLeave={() => {
-                if (!isSelecting) return;
-                setIsSelecting(false);
-                setDragRange(null);
+                if (!isSelectingRef.current) return;
+                isSelectingRef.current = false;
+                dragStartIndexRef.current = null;
+                dragEndIndexRef.current = null;
+                dragPixelStartRef.current = null;
+                dragPixelEndRef.current = null;
+                hideOverlay();
               }}
             />
           )}

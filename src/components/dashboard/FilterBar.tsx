@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button as UiButton } from '@/components/ui/button';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sourceConfig, FeedbackSource } from '@/data/mockFeedback';
@@ -18,6 +18,7 @@ interface FilterBarProps {
   onTimeChange: (time: TimeFilter) => void;
   customRange: { from: Date | null; to: Date | null };
   onCustomRangeChange: (range: { from: Date | null; to: Date | null }) => void;
+  isFiltering?: boolean;
 }
 
 const formatTime = (value: Date | null) => {
@@ -43,6 +44,7 @@ export function FilterBar({
   onTimeChange,
   customRange,
   onCustomRangeChange,
+  isFiltering = false,
 }: FilterBarProps) {
   const sources: (FeedbackSource | 'all')[] = ['all', 'support', 'discord', 'github', 'twitter', 'email', 'forum'];
   const times: TimeFilter[] = ['24h', '7d', '30d', 'all', 'custom'];
@@ -183,6 +185,12 @@ export function FilterBar({
               </div>
             )}
           </div>
+          {isFiltering && (
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Applying
+            </div>
+          )}
         </div>
       </div>
     </div>
