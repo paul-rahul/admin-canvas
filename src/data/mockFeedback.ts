@@ -61,8 +61,15 @@ const sourceAuthors: Record<FeedbackSource, string[]> = {
 
 const buildMockFeedback = (): FeedbackItem[] => {
   const items: FeedbackItem[] = [];
-  const startDate = new Date('2024-02-01T12:00:00Z').getTime();
+  const now = Date.now();
+  const twoYearsMs = 2 * 365 * 24 * 60 * 60 * 1000;
   const entryCount = 200;
+  let seed = 42;
+
+  const nextRandom = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
 
   sources.forEach((source) => {
     for (let i = 1; i <= entryCount; i += 1) {
@@ -73,6 +80,9 @@ const buildMockFeedback = (): FeedbackItem[] => {
       const surface = sourceTopics[source][i % sourceTopics[source].length];
       const template = contentTemplates[i % contentTemplates.length];
       const author = sourceAuthors[source][i % sourceAuthors[source].length];
+      const randomOffset = Math.floor(nextRandom() * twoYearsMs);
+      const bucketShift = (i % 8) * 3 * 24 * 60 * 60 * 1000;
+      const timestamp = new Date(now - randomOffset - bucketShift);
 
       items.push({
         id: `${source}-${i}`,
@@ -82,7 +92,7 @@ const buildMockFeedback = (): FeedbackItem[] => {
         sentiment,
         urgency,
         category,
-        timestamp: new Date(startDate - (items.length * 37 + i * 13) * 60000),
+        timestamp,
         author,
         resolved: i % 5 === 0 || sentiment === 'positive',
       });
