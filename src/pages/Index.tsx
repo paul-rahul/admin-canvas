@@ -1,26 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MessageSquare, AlertTriangle, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { Header } from '@/components/dashboard/Header';
 import { FilterBar } from '@/components/dashboard/FilterBar';
-import { MetricCard } from '@/components/dashboard/MetricCard';
 import { FeedbackTable } from '@/components/dashboard/FeedbackTable';
 import { SentimentChart } from '@/components/dashboard/SentimentChart';
 import { CategoryChart } from '@/components/dashboard/CategoryChart';
 import { SourceDistribution } from '@/components/dashboard/SourceDistribution';
 import { AIInsights } from '@/components/dashboard/AIInsights';
 import { FeedbackDetail } from '@/components/dashboard/FeedbackDetail';
-import { mockFeedback, FeedbackItem, FeedbackSource, Urgency } from '@/data/mockFeedback';
-
-type Metrics = {
-  total: number;
-  critical: number;
-  resolved: number;
-  avgResponseTime: string;
-};
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
+import { categoryConfig, mockFeedback, FeedbackItem, FeedbackSource, Urgency } from '@/data/mockFeedback';
+import { computeEmergingThemes } from '@/utils/emergingThemes';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>(mockFeedback);
-  const [serverMetrics, setServerMetrics] = useState<Metrics | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
   const [activeUrgency, setActiveUrgency] = useState<Urgency | 'all'>('all');
@@ -41,16 +34,29 @@ const Index = () => {
     });
   }, [feedback, searchQuery, activeSource, activeUrgency]);
 
-  const localMetrics = useMemo(() => {
-    const total = feedback.length;
-    const critical = feedback.filter((f) => f.urgency === 'critical' && !f.resolved).length;
-    const resolved = feedback.filter((f) => f.resolved).length;
-    const avgResponseTime = '2.4h';
+  const kpiFilters = useMemo(
+    () => ({
+      source: activeSource === 'all' ? null : activeSource,
+      urgency: activeUrgency === 'all' ? null : activeUrgency,
+      search: searchQuery,
+    }),
+    [activeSource, activeUrgency, searchQuery]
+  );
 
-    return { total, critical, resolved, avgResponseTime };
+  const emergingThemes = useMemo(() => {
+    const themes = Object.entries(categoryConfig).map(([theme_id, config]) => ({
+      theme_id,
+      name: config.label,
+    }));
+    return computeEmergingThemes(feedback, themes, new Date(), 7);
   }, [feedback]);
 
-  const metrics = serverMetrics ?? localMetrics;
+  const handleThemeSelect = (themeId: string) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('theme_id', themeId);
+    window.location.assign(`/themes?${params.toString()}`);
+  };
+
 
   const loadFeedback = async () => {
     try {
@@ -72,27 +78,12 @@ const Index = () => {
     }
   };
 
-  const loadMetrics = async () => {
-    try {
-      const response = await fetch('/api/metrics');
-      if (!response.ok) {
-        throw new Error('Failed to load metrics');
-      }
-      const payload = (await response.json()) as Metrics;
-      setServerMetrics(payload);
-    } catch (error) {
-      setServerMetrics(null);
-    }
-  };
-
   useEffect(() => {
     void loadFeedback();
-    void loadMetrics();
   }, []);
 
   const handleRefresh = () => {
     void loadFeedback();
-    void loadMetrics();
   };
 
   const handleResolve = (id: string) => {
@@ -114,40 +105,11 @@ const Index = () => {
         <Header onSearch={setSearchQuery} onRefresh={handleRefresh} />
 
         <main className="container mx-auto px-6 py-8 space-y-6">
-          {/* Metrics Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Total Feedback"
-              value={metrics.total}
-              subtitle="Last 7 days"
-              icon={MessageSquare}
-              trend={{ value: 12, isPositive: true }}
-              delay={1}
-            />
-            <MetricCard
-              title="Critical Issues"
-              value={metrics.critical}
-              subtitle="Requires attention"
-              icon={AlertTriangle}
-              delay={2}
-            />
-            <MetricCard
-              title="Resolved"
-              value={metrics.resolved}
-              subtitle={`${Math.round((metrics.resolved / metrics.total) * 100)}% resolution rate`}
-              icon={CheckCircle2}
-              trend={{ value: 8, isPositive: true }}
-              delay={3}
-            />
-            <MetricCard
-              title="Avg Response"
-              value={metrics.avgResponseTime}
-              subtitle="Time to first response"
-              icon={TrendingUp}
-              trend={{ value: 15, isPositive: true }}
-              delay={4}
-            />
-          </div>
+          {/* KPI Strip */}
+          <KpiStrip filters={kpiFilters} entries={feedback} />
+
+          {/* Emerging Themes */}
+          <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
 
           {/* Filters */}
           <FilterBar

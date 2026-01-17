@@ -65,6 +65,8 @@ const buildMockFeedback = (): FeedbackItem[] => {
   const twoYearsMs = 2 * 365 * 24 * 60 * 60 * 1000;
   const entryCount = 200;
   let seed = 42;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const emergingTargets: Category[] = ['performance', 'bug'];
 
   const nextRandom = () => {
     seed = (seed * 1664525 + 1013904223) % 4294967296;
@@ -81,8 +83,17 @@ const buildMockFeedback = (): FeedbackItem[] => {
       const template = contentTemplates[i % contentTemplates.length];
       const author = sourceAuthors[source][i % sourceAuthors[source].length];
       const randomOffset = Math.floor(nextRandom() * twoYearsMs);
-      const bucketShift = (i % 8) * 3 * 24 * 60 * 60 * 1000;
-      const timestamp = new Date(now - randomOffset - bucketShift);
+      const bucketShift = (i % 8) * 3 * dayMs;
+      let timestamp = new Date(now - randomOffset - bucketShift);
+
+      if (emergingTargets.includes(category)) {
+        if (i % 5 === 0) {
+          timestamp = new Date(now - Math.floor(nextRandom() * 7 * dayMs));
+        } else if (i % 11 === 0) {
+          const prevWindowOffset = 7 * dayMs + Math.floor(nextRandom() * 7 * dayMs);
+          timestamp = new Date(now - prevWindowOffset);
+        }
+      }
 
       items.push({
         id: `${source}-${i}`,
