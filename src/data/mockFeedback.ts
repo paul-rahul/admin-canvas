@@ -63,7 +63,7 @@ const buildMockFeedback = (): FeedbackItem[] => {
   const items: FeedbackItem[] = [];
   const now = Date.now();
   const twoYearsMs = 2 * 365 * 24 * 60 * 60 * 1000;
-  const entryCount = 200;
+  const totalEntries = 6000;
   let seed = 42;
   const dayMs = 24 * 60 * 60 * 1000;
   const emergingTargets: Category[] = ['performance', 'bug'];
@@ -73,11 +73,51 @@ const buildMockFeedback = (): FeedbackItem[] => {
     return seed / 4294967296;
   };
 
-  sources.forEach((source) => {
-    for (let i = 1; i <= entryCount; i += 1) {
-      const category = categories[(i + source.length) % categories.length];
-      const sentiment = sentiments[(i + category.length) % sentiments.length];
-      const urgency = urgencies[(i + sourceTopics[source][0].length) % urgencies.length];
+  const buildCounts = (total: number, bucketCount: number, minPerBucket = 0) => {
+    const remaining = Math.max(0, total - minPerBucket * bucketCount);
+    const rawWeights = Array.from({ length: bucketCount }, () => nextRandom() + 0.2);
+    const weightSum = rawWeights.reduce((sum, value) => sum + value, 0);
+    const counts = rawWeights.map(
+      (value) => minPerBucket + Math.floor((value / weightSum) * remaining)
+    );
+    let assigned = counts.reduce((sum, value) => sum + value, 0);
+    while (assigned < total) {
+      const index = Math.floor(nextRandom() * counts.length);
+      counts[index] += 1;
+      assigned += 1;
+    }
+    return counts;
+  };
+
+  const buildCategoryQueue = (total: number) => {
+    const counts = buildCounts(total, categories.length);
+
+    const queue: Category[] = [];
+    counts.forEach((count, index) => {
+      queue.push(...Array(count).fill(categories[index]));
+    });
+
+    for (let i = queue.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(nextRandom() * (i + 1));
+      [queue[i], queue[j]] = [queue[j], queue[i]];
+    }
+
+    return queue;
+  };
+
+  const categoryQueue = buildCategoryQueue(totalEntries);
+  let categoryIndex = 0;
+  const sourceCounts = buildCounts(totalEntries, sources.length, 400);
+
+  sources.forEach((source, sourceIndex) => {
+    const count = sourceCounts[sourceIndex] ?? 0;
+    for (let i = 1; i <= count; i += 1) {
+      const category = categoryQueue[categoryIndex % categoryQueue.length];
+      categoryIndex += 1;
+      const sentiment =
+        sentiments[(i + category.length + Math.floor(nextRandom() * sentiments.length)) % sentiments.length];
+      const urgency =
+        urgencies[(i + sourceTopics[source][0].length + Math.floor(nextRandom() * urgencies.length)) % urgencies.length];
       const topic = categoryTopics[category][i % categoryTopics[category].length];
       const surface = sourceTopics[source][i % sourceTopics[source].length];
       const template = contentTemplates[i % contentTemplates.length];

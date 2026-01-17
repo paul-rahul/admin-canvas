@@ -48,8 +48,8 @@ const Index = () => {
       theme_id,
       name: config.label,
     }));
-    return computeEmergingThemes(feedback, themes, new Date(), 7);
-  }, [feedback]);
+    return computeEmergingThemes(filteredFeedback, themes, new Date(), 7);
+  }, [filteredFeedback]);
 
   const handleThemeSelect = (themeId: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -105,12 +105,6 @@ const Index = () => {
         <Header onSearch={setSearchQuery} onRefresh={handleRefresh} />
 
         <main className="container mx-auto px-6 py-8 space-y-6">
-          {/* KPI Strip */}
-          <KpiStrip filters={kpiFilters} entries={feedback} />
-
-          {/* Emerging Themes */}
-          <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
-
           {/* Filters */}
           <FilterBar
             activeSource={activeSource}
@@ -118,6 +112,12 @@ const Index = () => {
             onSourceChange={setActiveSource}
             onUrgencyChange={setActiveUrgency}
           />
+
+          {/* KPI Strip */}
+          <KpiStrip filters={kpiFilters} entries={feedback} />
+
+          {/* Emerging Themes */}
+          <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
 
           {/* AI Insights */}
           <AIInsights feedback={filteredFeedback} />
