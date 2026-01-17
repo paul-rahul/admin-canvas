@@ -9,12 +9,14 @@ interface EmergingThemesCardProps {
   themes: EmergingTheme[];
   isLoading?: boolean;
   onSelectTheme?: (themeId: string) => void;
+  onViewTrend?: (themeId: string) => void;
 }
 
 export function EmergingThemesCard({
   themes,
   isLoading = false,
   onSelectTheme,
+  onViewTrend,
 }: EmergingThemesCardProps) {
   return (
     <div className="glass rounded-xl p-6 shadow-card">
@@ -67,15 +69,22 @@ export function EmergingThemesCard({
                 : '—';
 
             return (
-              <button
+              <div
                 key={theme.theme_id}
-                type="button"
-                onClick={() => onSelectTheme?.(theme.theme_id)}
-                disabled={!onSelectTheme}
+                onClick={() => onViewTrend?.(theme.theme_id)}
                 className={cn(
                   "w-full rounded-lg border border-border/50 px-3 py-2 text-left transition hover:bg-muted/30",
-                  !onSelectTheme && "cursor-default opacity-80"
+                  !onViewTrend && "cursor-default opacity-80",
+                  onViewTrend && "cursor-pointer"
                 )}
+                role={onViewTrend ? "button" : undefined}
+                tabIndex={onViewTrend ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onViewTrend?.(theme.theme_id);
+                  }
+                }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -90,7 +99,7 @@ export function EmergingThemesCard({
                     <span>Δ urgency {urgencyDelta}</span>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
       </div>

@@ -7,6 +7,7 @@ import { FeedbackDetail } from '@/components/dashboard/FeedbackDetail';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
 import { KpiCard } from '@/components/dashboard/KpiCard';
+import { IssueTrendModal } from '@/components/dashboard/IssueTrendModal';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 import { formatPercent } from '@/lib/kpiUtils';
@@ -16,8 +17,25 @@ const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>(mockFeedback);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
-  const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all'>('7d');
+  const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
   const [selectedItem, setSelectedItem] = useState<FeedbackItem | null>(null);
+  const [customRange, setCustomRange] = useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
+  });
+  const [trendThemeId, setTrendThemeId] = useState<string | null>(null);
+  const [isTrendOpen, setIsTrendOpen] = useState(false);
+  const defaultCustomRange = () => {
+    const now = new Date();
+    return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), to: now };
+  };
+
+  const normalizeRange = (range: { from: Date | null; to: Date | null }) => {
+    if (range.from && range.to && range.from > range.to) {
+      return { from: range.to, to: range.from };
+    }
+    return range;
+  };
 
   const filteredFeedback = useMemo(() => {
     const now = Date.now();
@@ -39,23 +57,31 @@ const Index = () => {
 
       const matchesSource = activeSource === 'all' || item.source === activeSource;
       const matchesTime =
-        !timeWindow || (item.timestamp && now - item.timestamp.getTime() <= timeWindow);
+        activeTime === 'custom'
+          ? (!customRange.from || (item.timestamp && item.timestamp >= customRange.from)) &&
+            (!customRange.to || (item.timestamp && item.timestamp <= customRange.to))
+          : !timeWindow || (item.timestamp && now - item.timestamp.getTime() <= timeWindow);
 
       return matchesSearch && matchesSource && matchesTime;
     });
-  }, [feedback, searchQuery, activeSource, activeTime]);
+  }, [feedback, searchQuery, activeSource, activeTime, customRange]);
 
   const kpiFilters = useMemo(
     () => ({
       source: activeSource === 'all' ? null : activeSource,
       from:
-        activeTime === 'all'
+        activeTime === 'custom'
+          ? customRange.from
+          : activeTime === 'all'
           ? null
-          : new Date(Date.now() - (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000),
-      to: activeTime === 'all' ? null : new Date(),
+          : new Date(
+              Date.now() -
+                (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000
+            ),
+      to: activeTime === 'custom' ? customRange.to : activeTime === 'all' ? null : new Date(),
       search: searchQuery,
     }),
-    [activeSource, activeTime, searchQuery]
+    [activeSource, activeTime, searchQuery, customRange]
   );
 
   const feedbackForEmerging = useMemo(() => {
@@ -76,9 +102,17 @@ const Index = () => {
       theme_id,
       name: config.label,
     }));
-    const windowDays = activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : activeTime === '30d' ? 30 : 30;
-    return computeEmergingThemes(feedbackForEmerging, themes, new Date(), windowDays, 2);
-  }, [feedbackForEmerging, activeTime]);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const customDays =
+      activeTime === 'custom' && customRange.from && customRange.to
+        ? Math.max(1, Math.round((customRange.to.getTime() - customRange.from.getTime()) / dayMs))
+        : null;
+    const windowDays =
+      customDays ??
+      (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : activeTime === '30d' ? 30 : 30);
+    const endDate = activeTime === 'custom' && customRange.to ? customRange.to : new Date();
+    return computeEmergingThemes(feedbackForEmerging, themes, endDate, windowDays, 2);
+  }, [feedbackForEmerging, activeTime, customRange]);
 
   const criticalPercent = useMemo(() => {
     const total = filteredFeedback.length;
@@ -96,6 +130,11 @@ const Index = () => {
     const params = new URLSearchParams(window.location.search);
     params.set('theme_id', themeId);
     window.location.assign(`/themes?${params.toString()}`);
+  };
+
+  const handleViewTrend = (themeId: string) => {
+    setTrendThemeId(themeId);
+    setIsTrendOpen(true);
   };
 
 
@@ -151,7 +190,17 @@ const Index = () => {
             activeSource={activeSource}
             activeTime={activeTime}
             onSourceChange={setActiveSource}
-            onTimeChange={setActiveTime}
+            onTimeChange={(time) => {
+              setActiveTime(time);
+              if (time === 'custom') {
+                setCustomRange(defaultCustomRange());
+              }
+            }}
+            customRange={customRange}
+            onCustomRangeChange={(range) => {
+              setCustomRange(normalizeRange(range));
+              setActiveTime('custom');
+            }}
           />
 
           {/* KPI Strip */}
@@ -177,7 +226,11 @@ const Index = () => {
                   }
                   className="h-full"
                 />
-                <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
+                <EmergingThemesCard
+                  themes={emergingThemes}
+                  onSelectTheme={handleThemeSelect}
+                  onViewTrend={handleViewTrend}
+                />
               </div>
             }
             extraRightCard={<AIInsights feedback={filteredFeedback} />}
@@ -195,6 +248,17 @@ const Index = () => {
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
         onResolve={handleResolve}
+      />
+      <IssueTrendModal
+        open={isTrendOpen}
+        onOpenChange={setIsTrendOpen}
+        entries={feedback}
+        issueTypeId={trendThemeId}
+        issueTypeLabel={
+          trendThemeId
+            ? issueTypeConfig[trendThemeId as keyof typeof issueTypeConfig]?.label ?? trendThemeId
+            : null
+        }
       />
     </div>
   );
