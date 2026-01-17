@@ -1,23 +1,26 @@
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
-import { FeedbackItem, categoryConfig } from '@/data/mockFeedback';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LabelList } from 'recharts';
+import { FeedbackItem, issueTypeConfig } from '@/data/mockFeedback';
 
 interface CategoryChartProps {
   feedback: FeedbackItem[];
+  embedded?: boolean;
+  showTooltip?: boolean;
 }
 
-export function CategoryChart({ feedback }: CategoryChartProps) {
-  const categoryCounts = feedback.reduce((acc, item) => {
-    acc[item.category] = (acc[item.category] || 0) + 1;
+export function CategoryChart({ feedback, embedded = false, showTooltip = true }: CategoryChartProps) {
+  const issueTypeCounts = feedback.reduce((acc, item) => {
+    const issueType = item.issueType ?? 'unknown';
+    acc[issueType] = (acc[issueType] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const data = Object.entries(categoryCounts).map(([key, value]) => ({
-    name: categoryConfig[key as keyof typeof categoryConfig]?.label || key,
+  const data = Object.entries(issueTypeCounts).map(([key, value]) => ({
+    name: issueTypeConfig[key as keyof typeof issueTypeConfig]?.label || 'Unknown',
     value,
-    category: key,
+    issueType: key,
   }));
 
-  const getBarColor = (category: string) => {
+  const getBarColor = (issueType: string) => {
     const colors: Record<string, string> = {
       bug: 'hsl(0, 72%, 51%)',
       feature: 'hsl(24, 100%, 50%)',
@@ -25,25 +28,25 @@ export function CategoryChart({ feedback }: CategoryChartProps) {
       ux: 'hsl(199, 89%, 48%)',
       pricing: 'hsl(142, 71%, 45%)',
       documentation: 'hsl(215, 20%, 55%)',
+      unknown: 'hsl(215, 20%, 55%)',
     };
-    return colors[category] || 'hsl(24, 100%, 50%)';
+    return colors[issueType] || 'hsl(24, 100%, 50%)';
   };
 
-  return (
-    <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-5">
-      <h3 className="text-lg font-semibold mb-4">Feedback by Category</h3>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ left: 0, right: 20 }}>
-            <XAxis type="number" hide />
-            <YAxis
-              type="category"
-              dataKey="name"
-              axisLine={false}
-              tickLine={false}
-              width={80}
-              tick={{ fill: 'hsl(215, 20%, 55%)', fontSize: 12 }}
-            />
+  const chart = (
+    <div className={embedded ? "h-40" : "h-64"}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ left: 0, right: embedded ? 48 : 20 }}>
+          <XAxis type="number" hide />
+          <YAxis
+            type="category"
+            dataKey="name"
+            axisLine={false}
+            tickLine={false}
+            width={embedded ? 100 : 80}
+            tick={{ fill: 'hsl(215, 20%, 55%)', fontSize: embedded ? 11 : 12 }}
+          />
+          {showTooltip && (
             <Tooltip
               contentStyle={{
                 backgroundColor: 'hsl(222, 47%, 10%)',
@@ -53,14 +56,26 @@ export function CategoryChart({ feedback }: CategoryChartProps) {
               }}
               cursor={{ fill: 'hsl(222, 47%, 14%)' }}
             />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={getBarColor(entry.category)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+          )}
+          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={getBarColor(entry.issueType)} />
+            ))}
+            <LabelList dataKey="value" position="right" fill="hsl(215, 20%, 70%)" fontSize={11} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+
+  if (embedded) {
+    return chart;
+  }
+
+  return (
+    <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-5">
+      <h3 className="text-lg font-semibold mb-4">Feedback by Issue Type</h3>
+      {chart}
     </div>
   );
 }

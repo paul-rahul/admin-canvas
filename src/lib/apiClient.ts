@@ -5,7 +5,7 @@ export type Entry = {
   timestamp?: string | Date;
   sentiment?: string;
   urgency?: string;
-  category?: string;
+  issueType?: string;
   title?: string;
   content?: string;
   author?: string;

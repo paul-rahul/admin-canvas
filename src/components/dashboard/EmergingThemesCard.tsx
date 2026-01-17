@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { EmergingTheme } from '@/utils/emergingThemes';
-import { Info } from 'lucide-react';
+import { Info, Flame } from 'lucide-react';
 
 interface EmergingThemesCardProps {
   themes: EmergingTheme[];
@@ -19,32 +18,30 @@ export function EmergingThemesCard({
 }: EmergingThemesCardProps) {
   return (
     <div className="glass rounded-xl p-6 shadow-card">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold">Emerging / Escalating Issues</h3>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="rounded-full text-muted-foreground hover:text-foreground"
-                    aria-label="Emerging themes info"
-                  >
-                    <Info className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Compared last 7 days vs prior 7 days; flagged on volume or urgency increases.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+      <div>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Flame className="h-4 w-4" />
           </div>
-          <p className="text-xs text-muted-foreground">Top 5 emerging themes by recent change</p>
+          <h3 className="text-lg font-semibold">Emerging Issues</h3>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-full text-muted-foreground hover:text-foreground"
+                  aria-label="Emerging issues info"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs whitespace-normal">
+                Compared last 7 days vs prior 7 days; flagged on volume or urgency increases.
+                Change in urgency is the change in average criticality between the current time window and the previous one.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-        <Badge variant="secondary" className="text-xs">
-          Emerging
-        </Badge>
       </div>
 
       <div className="mt-4 space-y-3">
@@ -85,33 +82,18 @@ export function EmergingThemesCard({
                     <p className="text-sm font-medium">{theme.name}</p>
                     <p className="text-xs text-muted-foreground">{theme.reasonText}</p>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>
                       {theme.prevCount} → {theme.currentCount}
                     </span>
+                    <span>|</span>
                     <span>Δ urgency {urgencyDelta}</span>
-                    <Badge variant="outline" className="text-xs">
-                      Emerging
-                    </Badge>
                   </div>
                 </div>
               </button>
             );
           })}
       </div>
-
-      {!isLoading && themes.length > 0 && (
-        <div className="mt-4 flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onSelectTheme?.(themes[0].theme_id)}
-            disabled={!onSelectTheme}
-          >
-            View themes
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

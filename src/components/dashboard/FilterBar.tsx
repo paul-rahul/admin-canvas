@@ -1,18 +1,24 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { sourceConfig, urgencyConfig, Urgency, FeedbackSource } from '@/data/mockFeedback';
+import { sourceConfig, FeedbackSource } from '@/data/mockFeedback';
 import { cn } from '@/lib/utils';
 
 interface FilterBarProps {
   activeSource: FeedbackSource | 'all';
-  activeUrgency: Urgency | 'all';
+  activeTime: '24h' | '7d' | '30d' | 'all';
   onSourceChange: (source: FeedbackSource | 'all') => void;
-  onUrgencyChange: (urgency: Urgency | 'all') => void;
+  onTimeChange: (time: '24h' | '7d' | '30d' | 'all') => void;
 }
 
-export function FilterBar({ activeSource, activeUrgency, onSourceChange, onUrgencyChange }: FilterBarProps) {
+export function FilterBar({ activeSource, activeTime, onSourceChange, onTimeChange }: FilterBarProps) {
   const sources: (FeedbackSource | 'all')[] = ['all', 'support', 'discord', 'github', 'twitter', 'email', 'forum'];
-  const urgencies: (Urgency | 'all')[] = ['all', 'critical', 'high', 'medium', 'low'];
+  const times: ('24h' | '7d' | '30d' | 'all')[] = ['24h', '7d', '30d', 'all'];
+  const timeLabels: Record<typeof times[number], string> = {
+    '24h': 'Last 24h',
+    '7d': 'Last 7d',
+    '30d': 'Last 30d',
+    all: 'All',
+  };
 
   return (
     <div className="glass rounded-xl p-4 shadow-card opacity-0 animate-slide-up stagger-1">
@@ -42,23 +48,21 @@ export function FilterBar({ activeSource, activeUrgency, onSourceChange, onUrgen
         <div className="h-6 w-px bg-border hidden md:block" />
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground font-medium">Urgency:</span>
+          <span className="text-sm text-muted-foreground font-medium">Time:</span>
           <div className="flex flex-wrap gap-2">
-            {urgencies.map((urgency) => (
+            {times.map((time) => (
               <Badge
-                key={urgency}
+                key={time}
                 variant="outline"
-                onClick={() => onUrgencyChange(urgency)}
+                onClick={() => onTimeChange(time)}
                 className={cn(
-                  "cursor-pointer capitalize hover:opacity-80 transition-opacity",
-                  activeUrgency === urgency
-                    ? urgency === 'all'
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : cn(urgencyConfig[urgency].bgColor, urgencyConfig[urgency].color, "border-transparent")
+                  "cursor-pointer hover:opacity-80 transition-opacity",
+                  activeTime === time
+                    ? "bg-primary text-primary-foreground border-primary"
                     : "border-border"
                 )}
               >
-                {urgency}
+                {timeLabels[time]}
               </Badge>
             ))}
           </div>

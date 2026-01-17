@@ -1,4 +1,4 @@
-import { FeedbackItem, sourceConfig, sentimentConfig, urgencyConfig, categoryConfig } from '@/data/mockFeedback';
+import { FeedbackItem, sourceConfig, sentimentConfig, urgencyConfig, issueTypeConfig } from '@/data/mockFeedback';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { X, CheckCircle2, ExternalLink, MessageSquare } from 'lucide-react';
@@ -17,7 +17,8 @@ export function FeedbackDetail({ item, onClose, onResolve }: FeedbackDetailProps
   const sourceConf = sourceConfig[item.source];
   const sentimentConf = sentimentConfig[item.sentiment];
   const urgencyConf = urgencyConfig[item.urgency];
-  const categoryConf = categoryConfig[item.category];
+  const issueTypeConf =
+    issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
       <div className="glass rounded-2xl w-full max-w-lg shadow-card border border-border/50 animate-slide-up">
@@ -51,9 +52,9 @@ export function FeedbackDetail({ item, onClose, onResolve }: FeedbackDetailProps
             </Badge>
             <Badge 
               variant="secondary"
-              className={cn("capitalize", categoryConf.color, "text-primary-foreground")}
+              className={cn("capitalize", issueTypeConf.color, "text-primary-foreground")}
             >
-              {categoryConf.label}
+              {issueTypeConf.label}
             </Badge>
             <Badge variant="outline" className={cn("capitalize", sentimentConf.color)}>
               {item.sentiment}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FeedbackItem, sourceConfig, sentimentConfig, urgencyConfig, categoryConfig } from '@/data/mockFeedback';
+import { FeedbackItem, sourceConfig, sentimentConfig, urgencyConfig, issueTypeConfig } from '@/data/mockFeedback';
 import { Badge } from '@/components/ui/badge';
 import {
   Pagination,
@@ -93,7 +93,7 @@ export function FeedbackTable({ feedback, onSelect }: FeedbackTableProps) {
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Feedback</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Urgency</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Type</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Time</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
             </tr>
@@ -104,7 +104,8 @@ export function FeedbackTable({ feedback, onSelect }: FeedbackTableProps) {
               const IconComponent = sourceIcons[sourceConf.icon];
               const sentimentConf = sentimentConfig[item.sentiment];
               const urgencyConf = urgencyConfig[item.urgency];
-              const categoryConf = categoryConfig[item.category];
+              const issueTypeConf =
+                issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
 
               return (
                 <tr
@@ -143,9 +144,9 @@ export function FeedbackTable({ feedback, onSelect }: FeedbackTableProps) {
                   <td className="px-4 py-3">
                     <Badge 
                       variant="secondary"
-                      className={cn("capitalize", categoryConf.color, "text-primary-foreground")}
+                      className={cn("capitalize", issueTypeConf.color, "text-primary-foreground")}
                     >
-                      {categoryConf.label}
+                      {issueTypeConf.label}
                     </Badge>
                   </td>
                   <td className="px-4 py-3">

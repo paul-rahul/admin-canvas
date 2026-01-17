@@ -62,7 +62,7 @@ export const deriveThemesFromEntries = (entries: Entry[]): Theme[] => {
   >();
 
   entries.forEach((entry) => {
-    const themeId = normalize(entry.category) || 'uncategorized';
+    const themeId = normalize(entry.issueType) || 'uncategorized';
     const sentiment = normalize(entry.sentiment) || 'neutral';
     const urgency = normalize(entry.urgency) || 'medium';
     const existing = themeMap.get(themeId) ?? {
@@ -147,6 +147,17 @@ export const computeTopSource = (entries: Entry[]) => {
   return top ? { source: top, count: counts[top] ?? 0 } : null;
 };
 
+export const computeTopIssueType = (entries: Entry[]) => {
+  const counts: Record<string, number> = {};
+  entries.forEach((entry) => {
+    const issueType = normalize(entry.issueType);
+    if (!issueType) return;
+    counts[issueType] = (counts[issueType] ?? 0) + 1;
+  });
+  const top = pickTopLabel(counts);
+  return top ? { issueType: top, count: counts[top] ?? 0 } : null;
+};
+
 export const computeEmergingThemes = (themes: Theme[] | null, trends: Trends | null) => {
   if (trends?.trending_up?.length) {
     return trends.trending_up.length;
@@ -173,7 +184,7 @@ export const computeEmergingThemesFromEntries = (entries: Entry[]) => {
   const counts = new Map<string, { recent: number; prior: number }>();
 
   entries.forEach((entry) => {
-    const theme = normalize(entry.category) || 'uncategorized';
+  const theme = normalize(entry.issueType) || 'uncategorized';
     const timestamp = parseTimestamp(entry.timestamp);
     if (!timestamp) return;
 

@@ -2,24 +2,31 @@ import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/dashboard/Header';
 import { FilterBar } from '@/components/dashboard/FilterBar';
 import { FeedbackTable } from '@/components/dashboard/FeedbackTable';
-import { SentimentChart } from '@/components/dashboard/SentimentChart';
-import { CategoryChart } from '@/components/dashboard/CategoryChart';
-import { SourceDistribution } from '@/components/dashboard/SourceDistribution';
 import { AIInsights } from '@/components/dashboard/AIInsights';
 import { FeedbackDetail } from '@/components/dashboard/FeedbackDetail';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
-import { categoryConfig, mockFeedback, FeedbackItem, FeedbackSource, Urgency } from '@/data/mockFeedback';
+import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>(mockFeedback);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
-  const [activeUrgency, setActiveUrgency] = useState<Urgency | 'all'>('all');
+  const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all'>('7d');
   const [selectedItem, setSelectedItem] = useState<FeedbackItem | null>(null);
 
   const filteredFeedback = useMemo(() => {
+    const now = Date.now();
+    const timeWindow =
+      activeTime === '24h'
+        ? 24 * 60 * 60 * 1000
+        : activeTime === '7d'
+        ? 7 * 24 * 60 * 60 * 1000
+        : activeTime === '30d'
+        ? 30 * 24 * 60 * 60 * 1000
+        : null;
+
     return feedback.filter((item) => {
       const matchesSearch =
         searchQuery === '' ||
@@ -28,28 +35,47 @@ const Index = () => {
         item.author.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesSource = activeSource === 'all' || item.source === activeSource;
-      const matchesUrgency = activeUrgency === 'all' || item.urgency === activeUrgency;
+      const matchesTime =
+        !timeWindow || (item.timestamp && now - item.timestamp.getTime() <= timeWindow);
 
-      return matchesSearch && matchesSource && matchesUrgency;
+      return matchesSearch && matchesSource && matchesTime;
     });
-  }, [feedback, searchQuery, activeSource, activeUrgency]);
+  }, [feedback, searchQuery, activeSource, activeTime]);
 
   const kpiFilters = useMemo(
     () => ({
       source: activeSource === 'all' ? null : activeSource,
-      urgency: activeUrgency === 'all' ? null : activeUrgency,
+      from:
+        activeTime === 'all'
+          ? null
+          : new Date(Date.now() - (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000),
+      to: activeTime === 'all' ? null : new Date(),
       search: searchQuery,
     }),
-    [activeSource, activeUrgency, searchQuery]
+    [activeSource, activeTime, searchQuery]
   );
 
+  const feedbackForEmerging = useMemo(() => {
+    return feedback.filter((item) => {
+      const matchesSearch =
+        searchQuery === '' ||
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.author.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesSource = activeSource === 'all' || item.source === activeSource;
+      return matchesSearch && matchesSource;
+    });
+  }, [feedback, searchQuery, activeSource]);
+
   const emergingThemes = useMemo(() => {
-    const themes = Object.entries(categoryConfig).map(([theme_id, config]) => ({
+    const themes = Object.entries(issueTypeConfig).map(([theme_id, config]) => ({
       theme_id,
       name: config.label,
     }));
-    return computeEmergingThemes(filteredFeedback, themes, new Date(), 7);
-  }, [filteredFeedback]);
+    const windowDays = activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : activeTime === '30d' ? 30 : 30;
+    return computeEmergingThemes(feedbackForEmerging, themes, new Date(), windowDays);
+  }, [feedbackForEmerging, activeTime]);
 
   const handleThemeSelect = (themeId: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -108,26 +134,27 @@ const Index = () => {
           {/* Filters */}
           <FilterBar
             activeSource={activeSource}
-            activeUrgency={activeUrgency}
+            activeTime={activeTime}
             onSourceChange={setActiveSource}
-            onUrgencyChange={setActiveUrgency}
+            onTimeChange={setActiveTime}
           />
 
           {/* KPI Strip */}
-          <KpiStrip filters={kpiFilters} entries={feedback} />
-
-          {/* Emerging Themes */}
-          <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
+          <KpiStrip
+            filters={kpiFilters}
+            entries={feedback}
+            onSourceSelect={(source) => {
+              setActiveSource(source as FeedbackSource);
+            }}
+            extraCard={
+              <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
+            }
+          />
 
           {/* AI Insights */}
           <AIInsights feedback={filteredFeedback} />
 
           {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <SentimentChart feedback={filteredFeedback} />
-            <SourceDistribution feedback={filteredFeedback} />
-            <CategoryChart feedback={filteredFeedback} />
-          </div>
 
           {/* Feedback Table */}
           <FeedbackTable feedback={filteredFeedback} onSelect={setSelectedItem} />

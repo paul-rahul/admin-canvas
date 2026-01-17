@@ -6,7 +6,7 @@ import {
   applyEntryFilters,
   computeCriticalPercentage,
   computeNegativePercentage,
-  computeTopSource,
+  computeTopIssueType,
   deriveThemesFromEntries,
 } from '@/lib/kpiUtils';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
@@ -16,7 +16,7 @@ type KpiData = {
   totalThemes: number | null;
   negativePercent: number | null;
   criticalPercent: number | null;
-  topSource: { source: string; count: number } | null;
+  topIssueType: { issueType: string; count: number } | null;
   emergingThemes: number | null;
 };
 
@@ -99,7 +99,7 @@ export const useDashboardKpis = (filters: KpiFilters, entriesOverride?: EntriesR
     const totalThemes = themesForKpis?.length ?? null;
     const negativePercent = computeNegativePercentage(filteredEntries, themesForKpis);
     const criticalPercent = computeCriticalPercentage(filteredEntries, themesForKpis);
-    const topSource = computeTopSource(filteredEntries);
+    const topIssueType = computeTopIssueType(filteredEntries);
     const emergingThemes = computeEmergingThemes(filteredEntries, themesForKpis ?? [], new Date(), 7);
 
     return {
@@ -107,7 +107,7 @@ export const useDashboardKpis = (filters: KpiFilters, entriesOverride?: EntriesR
       totalThemes,
       negativePercent,
       criticalPercent,
-      topSource,
+      topIssueType,
       emergingThemes: emergingThemes.length ? emergingThemes.length : null,
     };
   }, [entries, themes, trends, filters]);

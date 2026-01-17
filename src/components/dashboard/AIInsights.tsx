@@ -21,9 +21,10 @@ export function AIInsights({ feedback }: AIInsightsProps) {
   const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
 
   const criticalCount = feedback.filter(f => f.urgency === 'critical' && !f.resolved).length;
-  const negativeCount = feedback.filter(f => f.sentiment === 'negative').length;
-  const bugCount = feedback.filter(f => f.category === 'bug').length;
-  const featureRequests = feedback.filter(f => f.category === 'feature').length;
+  const criticalPercent = feedback.length
+    ? Math.round((criticalCount / feedback.length) * 1000) / 10
+    : 0;
+  const featureRequests = feedback.filter(f => f.issueType === 'feature').length;
 
   const fallbackInsights = useMemo<Insight[]>(
     () => [
@@ -42,17 +43,19 @@ export function AIInsights({ feedback }: AIInsightsProps) {
         content: `${featureRequests} feature requests identified. Focus on cron scheduling and dashboard UX.`,
         type: 'success',
       },
+      {
+        title: 'Critical Rate',
+        content: `${criticalPercent}% of feedback items are marked critical.`,
+        type: 'warning',
+      },
     ],
-    [criticalCount, featureRequests]
+    [criticalCount, criticalPercent, featureRequests]
   );
 
   const insights = useMemo(
     () => serverInsights?.insights ?? fallbackInsights,
     [serverInsights, fallbackInsights]
   );
-  const summary =
-    serverInsights?.summary ??
-    `${negativeCount} negative and ${bugCount} bug reports analyzed from ${feedback.length} total feedback items.`;
 
   const typeStyles = {
     warning: 'border-l-warning bg-warning/5',
@@ -127,9 +130,6 @@ export function AIInsights({ feedback }: AIInsightsProps) {
         ))}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-border/50">
-        <p className="text-xs text-muted-foreground">{summary}</p>
-      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 export type FeedbackSource = 'support' | 'discord' | 'github' | 'twitter' | 'email' | 'forum';
 export type Sentiment = 'positive' | 'negative' | 'neutral';
 export type Urgency = 'critical' | 'high' | 'medium' | 'low';
-export type Category = 'bug' | 'feature' | 'performance' | 'ux' | 'pricing' | 'documentation';
+export type IssueType = 'bug' | 'feature' | 'performance' | 'ux' | 'pricing' | 'documentation';
 
 export interface FeedbackItem {
   id: string;
@@ -10,14 +10,14 @@ export interface FeedbackItem {
   content: string;
   sentiment: Sentiment;
   urgency: Urgency;
-  category: Category;
+  issueType: IssueType;
   timestamp: Date;
   author: string;
   resolved: boolean;
 }
 
 const sources: FeedbackSource[] = ['support', 'discord', 'github', 'twitter', 'email', 'forum'];
-const categories: Category[] = ['bug', 'feature', 'performance', 'ux', 'pricing', 'documentation'];
+const issueTypes: IssueType[] = ['bug', 'feature', 'performance', 'ux', 'pricing', 'documentation'];
 const sentiments: Sentiment[] = ['positive', 'negative', 'neutral'];
 const urgencies: Urgency[] = ['critical', 'high', 'medium', 'low'];
 
@@ -30,7 +30,7 @@ const sourceTopics: Record<FeedbackSource, string[]> = {
   forum: ['best practices', 'migration', 'how-to', 'troubleshooting', 'case study', 'template', 'workflow', 'integration'],
 };
 
-const categoryTopics: Record<Category, string[]> = {
+const issueTypeTopics: Record<IssueType, string[]> = {
   bug: ['regression', 'error', 'crash', 'timeout', 'broken link', 'misconfiguration', 'unexpected behavior', 'edge case'],
   feature: ['request', 'enhancement', 'integration', 'automation', 'dashboard', 'API endpoint', 'flag', 'webhook'],
   performance: ['latency', 'throughput', 'cold start', 'cache hit rate', 'build time', 'query time', 'bandwidth'],
@@ -66,7 +66,7 @@ const buildMockFeedback = (): FeedbackItem[] => {
   const totalEntries = 6000;
   let seed = 42;
   const dayMs = 24 * 60 * 60 * 1000;
-  const emergingTargets: Category[] = ['performance', 'bug'];
+  const emergingTargets: IssueType[] = ['performance', 'bug'];
 
   const nextRandom = () => {
     seed = (seed * 1664525 + 1013904223) % 4294967296;
@@ -89,12 +89,12 @@ const buildMockFeedback = (): FeedbackItem[] => {
     return counts;
   };
 
-  const buildCategoryQueue = (total: number) => {
-    const counts = buildCounts(total, categories.length);
+  const buildIssueTypeQueue = (total: number) => {
+    const counts = buildCounts(total, issueTypes.length);
 
-    const queue: Category[] = [];
+    const queue: IssueType[] = [];
     counts.forEach((count, index) => {
-      queue.push(...Array(count).fill(categories[index]));
+      queue.push(...Array(count).fill(issueTypes[index]));
     });
 
     for (let i = queue.length - 1; i > 0; i -= 1) {
@@ -105,20 +105,20 @@ const buildMockFeedback = (): FeedbackItem[] => {
     return queue;
   };
 
-  const categoryQueue = buildCategoryQueue(totalEntries);
-  let categoryIndex = 0;
+  const issueTypeQueue = buildIssueTypeQueue(totalEntries);
+  let issueTypeIndex = 0;
   const sourceCounts = buildCounts(totalEntries, sources.length, 400);
 
   sources.forEach((source, sourceIndex) => {
     const count = sourceCounts[sourceIndex] ?? 0;
     for (let i = 1; i <= count; i += 1) {
-      const category = categoryQueue[categoryIndex % categoryQueue.length];
-      categoryIndex += 1;
+      const issueType = issueTypeQueue[issueTypeIndex % issueTypeQueue.length];
+      issueTypeIndex += 1;
       const sentiment =
-        sentiments[(i + category.length + Math.floor(nextRandom() * sentiments.length)) % sentiments.length];
+        sentiments[(i + issueType.length + Math.floor(nextRandom() * sentiments.length)) % sentiments.length];
       const urgency =
         urgencies[(i + sourceTopics[source][0].length + Math.floor(nextRandom() * urgencies.length)) % urgencies.length];
-      const topic = categoryTopics[category][i % categoryTopics[category].length];
+      const topic = issueTypeTopics[issueType][i % issueTypeTopics[issueType].length];
       const surface = sourceTopics[source][i % sourceTopics[source].length];
       const template = contentTemplates[i % contentTemplates.length];
       const author = sourceAuthors[source][i % sourceAuthors[source].length];
@@ -126,7 +126,7 @@ const buildMockFeedback = (): FeedbackItem[] => {
       const bucketShift = (i % 8) * 3 * dayMs;
       let timestamp = new Date(now - randomOffset - bucketShift);
 
-      if (emergingTargets.includes(category)) {
+      if (emergingTargets.includes(issueType)) {
         if (i % 5 === 0) {
           timestamp = new Date(now - Math.floor(nextRandom() * 7 * dayMs));
         } else if (i % 11 === 0) {
@@ -142,7 +142,7 @@ const buildMockFeedback = (): FeedbackItem[] => {
         content: template.replace('{topic}', topic).replace('{surface}', surface),
         sentiment,
         urgency,
-        category,
+        issueType,
         timestamp,
         author,
         resolved: i % 5 === 0 || sentiment === 'positive',
@@ -177,7 +177,7 @@ export const urgencyConfig: Record<Urgency, { label: string; color: string; bgCo
   low: { label: 'Low', color: 'text-muted-foreground', bgColor: 'bg-muted' },
 };
 
-export const categoryConfig: Record<Category, { label: string; color: string }> = {
+export const issueTypeConfig: Record<IssueType, { label: string; color: string }> = {
   bug: { label: 'Bug', color: 'bg-destructive' },
   feature: { label: 'Feature', color: 'bg-primary' },
   performance: { label: 'Performance', color: 'bg-warning' },

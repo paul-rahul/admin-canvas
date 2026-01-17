@@ -134,7 +134,7 @@ export const computeEmergingThemes = (
   let hasTimestamp = false;
 
   entries.forEach((entry) => {
-    const themeId = (entry as { theme_id?: string }).theme_id ?? entry.category ?? 'uncategorized';
+    const themeId = (entry as { theme_id?: string }).theme_id ?? entry.issueType ?? 'uncategorized';
     const normalizedId = String(themeId).toLowerCase();
     const timestamp = parseTimestampSafe(entry.timestamp);
     if (!timestamp) {

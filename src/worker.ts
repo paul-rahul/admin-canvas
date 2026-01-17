@@ -44,22 +44,22 @@ const computeMetrics = (items: FeedbackApiItem[]) => {
 };
 
 const computeCounts = (items: FeedbackApiItem[]) => {
-  const byCategory: Record<string, number> = {};
+  const byIssueType: Record<string, number> = {};
   const bySource: Record<string, number> = {};
   const negative = items.filter((item) => item.sentiment === 'negative').length;
-  const bug = items.filter((item) => item.category === 'bug').length;
-  const feature = items.filter((item) => item.category === 'feature').length;
+  const bug = items.filter((item) => item.issueType === 'bug').length;
+  const feature = items.filter((item) => item.issueType === 'feature').length;
   const critical = items.filter((item) => item.urgency === 'critical' && !item.resolved).length;
 
   for (const item of items) {
-    byCategory[item.category] = (byCategory[item.category] ?? 0) + 1;
+    byIssueType[item.issueType] = (byIssueType[item.issueType] ?? 0) + 1;
     bySource[item.source] = (bySource[item.source] ?? 0) + 1;
   }
 
-  const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'bug';
+  const topIssueType = Object.entries(byIssueType).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'bug';
   const topSource = Object.entries(bySource).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'support';
 
-  return { negative, bug, feature, critical, topCategory, topSource };
+  return { negative, bug, feature, critical, topIssueType, topSource };
 };
 
 const defaultInsights = (items: FeedbackApiItem[]) => {
@@ -73,7 +73,7 @@ const defaultInsights = (items: FeedbackApiItem[]) => {
       },
       {
         title: 'Trending Topics',
-        content: `Most feedback clusters around ${counts.topCategory} and originates from ${counts.topSource}.`,
+        content: `Most feedback clusters around ${counts.topIssueType} and originates from ${counts.topSource}.`,
         type: 'info',
       },
       {
@@ -110,7 +110,7 @@ const buildInsights = async (env: Env, items: FeedbackApiItem[]) => {
     `Create 3 concise insights from this feedback snapshot.`,
     `Return JSON with keys: insights (array of {title, content, type}) and summary.`,
     `Type must be one of: warning, info, success.`,
-    `Counts: total=${items.length}, critical=${counts.critical}, negative=${counts.negative}, bug=${counts.bug}, feature=${counts.feature}, topCategory=${counts.topCategory}, topSource=${counts.topSource}.`,
+    `Counts: total=${items.length}, critical=${counts.critical}, negative=${counts.negative}, bug=${counts.bug}, feature=${counts.feature}, topIssueType=${counts.topIssueType}, topSource=${counts.topSource}.`,
   ].join(' ');
 
   try {
