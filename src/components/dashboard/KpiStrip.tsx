@@ -13,12 +13,14 @@ interface KpiStripProps {
   entries?: Entry[];
   extraCard?: React.ReactNode;
   onSourceSelect?: (source: string) => void;
+  extraRightCard?: React.ReactNode;
 }
 
-export function KpiStrip({ filters, entries, extraCard, onSourceSelect }: KpiStripProps) {
+export function KpiStrip({ filters, entries, extraCard, onSourceSelect, extraRightCard }: KpiStripProps) {
   const entriesOverride = entries ? { items: entries, total: entries.length } : null;
   const { kpis, isLoading, error } = useDashboardKpis(filters, entriesOverride);
   const [hoveredSource, setHoveredSource] = useState<string | null>(null);
+  const [activeSource, setActiveSource] = useState<string | null>(null);
 
   const filteredEntries = useMemo(
     () => applyEntryFilters(entries ?? [], filters),
@@ -84,24 +86,46 @@ export function KpiStrip({ filters, entries, extraCard, onSourceSelect }: KpiStr
           {error}
         </div>
       )}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-12 auto-rows-fr">
-        <div className="xl:col-span-7">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-[4.5fr_2.5fr_2.5fr_2.5fr] auto-rows-fr">
+        <div className="xl:col-span-1">
           <KpiCard
-            title="Total Entries"
-            value={kpis.totalEntries ?? '—'}
+            title="Ticket Counter"
+            value={
+              <span>
+                {kpis.totalEntries ?? '—'} <span className="text-base font-semibold">tickets</span>
+              </span>
+            }
             isLoading={isLoading}
             icon={ListChecks}
             tooltip="Within current filters"
           >
             {sourceData.items.length > 0 && (
               <div
-                className="mt-3 grid items-stretch gap-4 [grid-template-columns:minmax(240px,1fr)_1px_auto]"
-                onMouseLeave={() => setHoveredSource(null)}
+                className="mt-3 grid items-center gap-4 [grid-template-columns:minmax(240px,1fr)_1px_auto]"
+                onMouseLeave={() => {
+                  setHoveredSource(null);
+                  setActiveSource(null);
+                }}
               >
                 <div className="min-w-[240px]">
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
+                      <PieChart
+                        onClick={(state: { activePayload?: Array<{ payload?: { source?: string } }> }) => {
+                          const source = state?.activePayload?.[0]?.payload?.source;
+                          if (source) {
+                            setActiveSource(source);
+                            onSourceSelect?.(source);
+                          }
+                        }}
+                        onPointerDown={(state: { activePayload?: Array<{ payload?: { source?: string } }> }) => {
+                          const source = state?.activePayload?.[0]?.payload?.source;
+                          if (source) {
+                            setActiveSource(source);
+                            onSourceSelect?.(source);
+                          }
+                        }}
+                      >
                         <Pie
                           data={sourceData.items}
                           dataKey="count"
@@ -109,35 +133,72 @@ export function KpiStrip({ filters, entries, extraCard, onSourceSelect }: KpiStr
                           innerRadius={44}
                           outerRadius={106}
                           paddingAngle={2}
+                          onClick={(data) => {
+                            const source =
+                              (data as { source?: string })?.source ??
+                              (data as { payload?: { source?: string } })?.payload?.source;
+                            if (source) {
+                              setActiveSource(source);
+                              onSourceSelect?.(source);
+                            }
+                          }}
+                          onPointerDown={(data) => {
+                            const source =
+                              (data as { source?: string })?.source ??
+                              (data as { payload?: { source?: string } })?.payload?.source;
+                            if (source) {
+                              setActiveSource(source);
+                              onSourceSelect?.(source);
+                            }
+                          }}
+                          style={onSourceSelect ? { cursor: 'pointer' } : undefined}
                         >
                           {sourceData.items.map((entry) => (
-                          <Cell
-                            key={entry.source}
-                            fill={sourceColors[entry.source] ?? sourceColors.unknown}
-                            opacity={hoveredSource && hoveredSource !== entry.source ? 0.2 : 1}
-                            onMouseEnter={() => setHoveredSource(entry.source)}
-                            onClick={() => onSourceSelect?.(entry.source)}
-                            className={onSourceSelect ? "cursor-pointer" : undefined}
-                          />
-                        ))}
+                            <Cell
+                              key={entry.source}
+                              fill={sourceColors[entry.source] ?? sourceColors.unknown}
+                              opacity={
+                                (hoveredSource && hoveredSource !== entry.source) ||
+                                (activeSource && activeSource !== entry.source)
+                                  ? 0.2
+                                  : 1
+                              }
+                              onMouseEnter={() => setHoveredSource(entry.source)}
+                              onClick={() => {
+                                setActiveSource(entry.source);
+                                onSourceSelect?.(entry.source);
+                              }}
+                              onPointerDown={() => {
+                                setActiveSource(entry.source);
+                                onSourceSelect?.(entry.source);
+                              }}
+                              className={onSourceSelect ? "cursor-pointer" : undefined}
+                            />
+                          ))}
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
                 <div className="w-px bg-border/70" />
-                <div className="space-y-1 text-xs text-muted-foreground w-fit">
+                <div className="space-y-1 text-xs text-muted-foreground w-fit self-center">
                   {[...sourceData.items]
                     .sort((a, b) => b.count - a.count)
                     .map((entry) => {
                       const isHovered = hoveredSource === entry.source;
-                      const isDimmed = hoveredSource && !isHovered;
+                      const isActive = activeSource === entry.source;
+                      const isDimmed = (hoveredSource && !isHovered) || (activeSource && !isActive);
                       return (
                         <div
                           key={entry.source}
+                          onClick={() => {
+                            setActiveSource(entry.source);
+                            onSourceSelect?.(entry.source);
+                          }}
                           className={[
                             "flex items-center gap-2 transition-opacity whitespace-nowrap",
                             isDimmed ? "opacity-30" : "opacity-100",
+                            onSourceSelect ? "cursor-pointer" : "",
                           ].join(' ')}
                         >
                           <span
@@ -147,11 +208,9 @@ export function KpiStrip({ filters, entries, extraCard, onSourceSelect }: KpiStr
                           <span
                             onMouseEnter={() => setHoveredSource(entry.source)}
                             onMouseLeave={() => setHoveredSource(null)}
-                            onClick={() => onSourceSelect?.(entry.source)}
                             className={[
-                              isHovered ? "font-semibold text-foreground" : "",
-                              !hoveredSource && entry.source === sourceData.top ? "font-semibold text-foreground" : "",
-                              onSourceSelect ? "cursor-pointer" : "",
+                              isHovered || isActive ? "font-semibold text-foreground" : "",
+                              !hoveredSource && !activeSource && entry.source === sourceData.top ? "font-semibold text-foreground" : "",
                             ].join(' ')}
                           >
                             {entry.label} {entry.percent}% ({entry.count})
@@ -164,41 +223,45 @@ export function KpiStrip({ filters, entries, extraCard, onSourceSelect }: KpiStr
             )}
           </KpiCard>
         </div>
-        <div className="xl:col-span-2">
+        <div className="xl:col-span-1">
           <KpiCard
-            title="Issue Counter"
-            value={kpis.totalEntries ?? '—'}
+            title="Issue Types"
+            value={null}
             isLoading={isLoading}
             icon={BarChart2}
             tooltip="Total issues in view"
+            valueHidden
           >
-            <div className="mt-3 space-y-2">
-              {issueTypeData.map((entry) => {
-                const isTop = entry.issueType === kpis.topIssueType?.issueType;
-                return (
-                  <div key={entry.issueType} className="space-y-1">
-                    <div
-                      className={[
-                        "flex items-center justify-between text-xs",
-                        isTop ? "text-foreground font-semibold" : "text-muted-foreground",
-                      ].join(' ')}
-                    >
-                      <span>{entry.label}</span>
-                      <span>{entry.count}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="mt-3 flex w-full flex-1 items-center justify-center">
+              <div className="w-full max-w-xs space-y-2">
+                {issueTypeData.map((entry) => {
+                  const isTop = entry.issueType === kpis.topIssueType?.issueType;
+                  return (
+                    <div key={entry.issueType} className="w-full space-y-1">
                       <div
-                        className={`h-full rounded-full ${entry.color} ${isTop ? "shadow-[0_0_12px_hsl(var(--primary)/0.6)]" : ""}`}
-                        style={{ width: `${entry.percent}%` }}
-                      />
+                        className={[
+                          "flex items-center justify-between text-xs",
+                          isTop ? "text-foreground font-semibold" : "text-muted-foreground",
+                        ].join(' ')}
+                      >
+                        <span>{entry.label}</span>
+                        <span>{entry.count}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${entry.color} ${isTop ? "shadow-[0_0_12px_hsl(var(--primary)/0.6)]" : ""}`}
+                          style={{ width: `${entry.percent}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </KpiCard>
         </div>
-        {extraCard && <div className="xl:col-span-3">{extraCard}</div>}
+        {extraCard && <div className="xl:col-span-1">{extraCard}</div>}
+        {extraRightCard && <div className="xl:col-span-1">{extraRightCard}</div>}
       </div>
     </div>
   );

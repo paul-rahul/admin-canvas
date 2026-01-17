@@ -116,7 +116,8 @@ export const computeEmergingThemes = (
   entries: Entry[],
   themes: Theme[] = [],
   now: Date,
-  windowDays = 7
+  windowDays = 7,
+  limit = 5
 ): EmergingTheme[] => {
   const nowMs = now.getTime();
   const currentStart = nowMs - windowDays * DAY_MS;
@@ -248,5 +249,5 @@ export const computeEmergingThemes = (
     });
   });
 
-  return emerging.sort((a, b) => b.emergingScore - a.emergingScore).slice(0, 5);
+  return emerging.sort((a, b) => b.emergingScore - a.emergingScore).slice(0, limit);
 };

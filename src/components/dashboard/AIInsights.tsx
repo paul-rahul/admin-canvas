@@ -21,9 +21,6 @@ export function AIInsights({ feedback }: AIInsightsProps) {
   const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
 
   const criticalCount = feedback.filter(f => f.urgency === 'critical' && !f.resolved).length;
-  const criticalPercent = feedback.length
-    ? Math.round((criticalCount / feedback.length) * 1000) / 10
-    : 0;
   const featureRequests = feedback.filter(f => f.issueType === 'feature').length;
 
   const fallbackInsights = useMemo<Insight[]>(
@@ -43,19 +40,14 @@ export function AIInsights({ feedback }: AIInsightsProps) {
         content: `${featureRequests} feature requests identified. Focus on cron scheduling and dashboard UX.`,
         type: 'success',
       },
-      {
-        title: 'Critical Rate',
-        content: `${criticalPercent}% of feedback items are marked critical.`,
-        type: 'warning',
-      },
     ],
-    [criticalCount, criticalPercent, featureRequests]
+    [criticalCount, featureRequests]
   );
 
-  const insights = useMemo(
-    () => serverInsights?.insights ?? fallbackInsights,
-    [serverInsights, fallbackInsights]
-  );
+  const insights = useMemo(() => {
+    const list = serverInsights?.insights ?? fallbackInsights;
+    return list.filter((insight) => insight.title !== 'Critical Issues');
+  }, [serverInsights, fallbackInsights]);
 
   const typeStyles = {
     warning: 'border-l-warning bg-warning/5',
@@ -96,7 +88,7 @@ export function AIInsights({ feedback }: AIInsightsProps) {
   }, []);
 
   return (
-    <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-2">
+    <div className="glass rounded-xl p-6 shadow-card h-full">
       <div className="flex items-center gap-2 mb-4">
         <div className="p-2 rounded-lg gradient-primary">
           <Sparkles className="h-5 w-5 text-primary-foreground" />

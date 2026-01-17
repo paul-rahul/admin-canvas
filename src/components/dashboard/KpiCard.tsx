@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 interface KpiCardProps {
   title: string;
   value: React.ReactNode;
-  subtext?: string;
+  subtext?: React.ReactNode;
   isLoading?: boolean;
   tooltip?: string;
   trendBadge?: string;
@@ -54,7 +54,9 @@ export function KpiCard({
                       <Info className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-xs whitespace-normal">{tooltip}</TooltipContent>
+                  <TooltipContent side="top" className="z-[60] max-w-xs whitespace-normal">
+                    {tooltip}
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}

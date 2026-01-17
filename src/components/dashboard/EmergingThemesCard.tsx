@@ -35,9 +35,9 @@ export function EmergingThemesCard({
                   <Info className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent className="max-w-xs whitespace-normal">
+              <TooltipContent side="top" sideOffset={10} className="z-[100] max-w-xs whitespace-normal">
                 Compared last 7 days vs prior 7 days; flagged on volume or urgency increases.
-                Change in urgency is the change in average criticality between the current time window and the previous one.
+                Change in urgency is the change in average criticality between the current time window and the previous one. For "All", default is a 7 day window 
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -55,7 +55,7 @@ export function EmergingThemesCard({
 
         {!isLoading && themes.length === 0 && (
           <div className="rounded-lg border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
-            No emerging themes detected in the last two weeks.
+            No emerging issue themes detected.
           </div>
         )}
 

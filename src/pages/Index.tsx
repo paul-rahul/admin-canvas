@@ -6,8 +6,11 @@ import { AIInsights } from '@/components/dashboard/AIInsights';
 import { FeedbackDetail } from '@/components/dashboard/FeedbackDetail';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
+import { KpiCard } from '@/components/dashboard/KpiCard';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
+import { formatPercent } from '@/lib/kpiUtils';
+import { AlertTriangle } from 'lucide-react';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>(mockFeedback);
@@ -74,8 +77,20 @@ const Index = () => {
       name: config.label,
     }));
     const windowDays = activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : activeTime === '30d' ? 30 : 30;
-    return computeEmergingThemes(feedbackForEmerging, themes, new Date(), windowDays);
+    return computeEmergingThemes(feedbackForEmerging, themes, new Date(), windowDays, 2);
   }, [feedbackForEmerging, activeTime]);
+
+  const criticalPercent = useMemo(() => {
+    const total = filteredFeedback.length;
+    if (!total) return '—';
+    const criticalCount = filteredFeedback.filter((item) => item.urgency === 'critical').length;
+    return formatPercent((criticalCount / total) * 100);
+  }, [filteredFeedback]);
+
+  const criticalCount = useMemo(
+    () => filteredFeedback.filter((item) => item.urgency === 'critical' && !item.resolved).length,
+    [filteredFeedback]
+  );
 
   const handleThemeSelect = (themeId: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -147,12 +162,26 @@ const Index = () => {
               setActiveSource(source as FeedbackSource);
             }}
             extraCard={
-              <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
+              <div className="grid h-full grid-rows-[1fr_auto] gap-4">
+                <KpiCard
+                  title="Critical Issues"
+                  value={criticalPercent}
+                  icon={AlertTriangle}
+                  tooltip="Computed as unresolved items where urgency is critical within the current time window."
+                  subtext={
+                    <span>
+                      <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
+                      <span className="font-semibold text-foreground">unresolved</span> critical tickets require
+                      immediate attention.
+                    </span>
+                  }
+                  className="h-full"
+                />
+                <EmergingThemesCard themes={emergingThemes} onSelectTheme={handleThemeSelect} />
+              </div>
             }
+            extraRightCard={<AIInsights feedback={filteredFeedback} />}
           />
-
-          {/* AI Insights */}
-          <AIInsights feedback={filteredFeedback} />
 
           {/* Charts Row */}
 
