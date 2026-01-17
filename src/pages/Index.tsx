@@ -111,7 +111,7 @@ const Index = () => {
       customDays ??
       (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : activeTime === '30d' ? 30 : 30);
     const endDate = activeTime === 'custom' && customRange.to ? customRange.to : new Date();
-    return computeEmergingThemes(feedbackForEmerging, themes, endDate, windowDays, 2);
+    return computeEmergingThemes(feedbackForEmerging, themes, endDate, windowDays, 3);
   }, [feedbackForEmerging, activeTime, customRange]);
 
   const criticalPercent = useMemo(() => {
@@ -210,7 +210,7 @@ const Index = () => {
             onSourceSelect={(source) => {
               setActiveSource(source as FeedbackSource);
             }}
-            extraCard={
+            extraCard={(issueTypesCard) => (
               <div className="grid h-full grid-rows-[1fr_auto] gap-4">
                 <KpiCard
                   title="Critical Issues"
@@ -226,12 +226,15 @@ const Index = () => {
                   }
                   className="h-full"
                 />
-                <EmergingThemesCard
-                  themes={emergingThemes}
-                  onSelectTheme={handleThemeSelect}
-                  onViewTrend={handleViewTrend}
-                />
+                <div className="h-full">{issueTypesCard}</div>
               </div>
+            )}
+            secondaryCard={
+              <EmergingThemesCard
+                themes={emergingThemes}
+                onSelectTheme={handleThemeSelect}
+                onViewTrend={handleViewTrend}
+              />
             }
             extraRightCard={<AIInsights feedback={filteredFeedback} />}
           />
@@ -252,13 +255,18 @@ const Index = () => {
       <IssueTrendModal
         open={isTrendOpen}
         onOpenChange={setIsTrendOpen}
-        entries={feedback}
+        entries={feedbackForEmerging}
+        summaryEntries={feedbackForEmerging}
         issueTypeId={trendThemeId}
         issueTypeLabel={
           trendThemeId
             ? issueTypeConfig[trendThemeId as keyof typeof issueTypeConfig]?.label ?? trendThemeId
             : null
         }
+        onTimeRangeSelect={(range) => {
+          setCustomRange(normalizeRange(range));
+          setActiveTime('custom');
+        }}
       />
     </div>
   );

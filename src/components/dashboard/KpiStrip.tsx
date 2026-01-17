@@ -11,12 +11,20 @@ import type { Entry } from '@/lib/apiClient';
 interface KpiStripProps {
   filters: KpiFilters;
   entries?: Entry[];
-  extraCard?: React.ReactNode;
+  extraCard?: React.ReactNode | ((issueTypesCard: React.ReactNode) => React.ReactNode);
+  secondaryCard?: React.ReactNode;
   onSourceSelect?: (source: string) => void;
   extraRightCard?: React.ReactNode;
 }
 
-export function KpiStrip({ filters, entries, extraCard, onSourceSelect, extraRightCard }: KpiStripProps) {
+export function KpiStrip({
+  filters,
+  entries,
+  extraCard,
+  secondaryCard,
+  onSourceSelect,
+  extraRightCard,
+}: KpiStripProps) {
   const entriesOverride = entries ? { items: entries, total: entries.length } : null;
   const { kpis, isLoading, error } = useDashboardKpis(filters, entriesOverride);
   const [hoveredSource, setHoveredSource] = useState<string | null>(null);
@@ -78,6 +86,48 @@ export function KpiStrip({ filters, entries, extraCard, onSourceSelect, extraRig
     forum: 'hsl(var(--success))',
     unknown: 'hsl(var(--muted-foreground))',
   };
+
+  const issueTypesCard = (
+    <KpiCard
+      title="Issue Types"
+      value={null}
+      isLoading={isLoading}
+      icon={BarChart2}
+      tooltip="Total issues in view"
+      valueHidden
+      valueSpacerClassName="h-1"
+    >
+      <div className="mt-2 flex w-full flex-1 items-center justify-center">
+        <div className="w-full max-w-xs space-y-1">
+          {issueTypeData.map((entry) => {
+            const isTop = entry.issueType === kpis.topIssueType?.issueType;
+            return (
+              <div key={entry.issueType} className="w-full space-y-0.5">
+                <div
+                  className={[
+                    "flex items-center justify-between text-xs",
+                    isTop ? "text-foreground font-semibold" : "text-muted-foreground",
+                  ].join(' ')}
+                >
+                  <span>{entry.label}</span>
+                  <span>{entry.count}</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${entry.color} ${isTop ? "shadow-[0_0_12px_hsl(var(--primary)/0.6)]" : ""}`}
+                    style={{ width: `${entry.percent}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </KpiCard>
+  );
+
+  const resolvedExtraCard =
+    typeof extraCard === 'function' ? extraCard(issueTypesCard) : extraCard;
 
   return (
     <div className="space-y-3">
@@ -223,44 +273,8 @@ export function KpiStrip({ filters, entries, extraCard, onSourceSelect, extraRig
             )}
           </KpiCard>
         </div>
-        <div className="xl:col-span-1">
-          <KpiCard
-            title="Issue Types"
-            value={null}
-            isLoading={isLoading}
-            icon={BarChart2}
-            tooltip="Total issues in view"
-            valueHidden
-          >
-            <div className="mt-3 flex w-full flex-1 items-center justify-center">
-              <div className="w-full max-w-xs space-y-2">
-                {issueTypeData.map((entry) => {
-                  const isTop = entry.issueType === kpis.topIssueType?.issueType;
-                  return (
-                    <div key={entry.issueType} className="w-full space-y-1">
-                      <div
-                        className={[
-                          "flex items-center justify-between text-xs",
-                          isTop ? "text-foreground font-semibold" : "text-muted-foreground",
-                        ].join(' ')}
-                      >
-                        <span>{entry.label}</span>
-                        <span>{entry.count}</span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${entry.color} ${isTop ? "shadow-[0_0_12px_hsl(var(--primary)/0.6)]" : ""}`}
-                          style={{ width: `${entry.percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </KpiCard>
-        </div>
-        {extraCard && <div className="xl:col-span-1">{extraCard}</div>}
+        {resolvedExtraCard && <div className="xl:col-span-1">{resolvedExtraCard}</div>}
+        <div className="xl:col-span-1">{secondaryCard ?? issueTypesCard}</div>
         {extraRightCard && <div className="xl:col-span-1">{extraRightCard}</div>}
       </div>
     </div>

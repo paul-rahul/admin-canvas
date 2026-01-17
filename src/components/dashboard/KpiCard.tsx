@@ -15,6 +15,7 @@ interface KpiCardProps {
   children?: React.ReactNode;
   icon?: LucideIcon;
   valueHidden?: boolean;
+  valueSpacerClassName?: string;
 }
 
 export function KpiCard({
@@ -28,6 +29,7 @@ export function KpiCard({
   children,
   icon: Icon,
   valueHidden = false,
+  valueSpacerClassName,
 }: KpiCardProps) {
   const displayValue = value === null || value === undefined || value === '' ? '—' : value;
 
@@ -70,7 +72,7 @@ export function KpiCard({
           {!isLoading && !valueHidden && (
             <p className="text-3xl font-bold tracking-tight break-words">{displayValue}</p>
           )}
-          {valueHidden && <div className="h-9" />}
+          {valueHidden && <div className={valueSpacerClassName ?? "h-9"} />}
           {!isLoading && children}
         </div>
         {trendBadge && !isLoading && (
