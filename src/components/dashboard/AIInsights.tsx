@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Sparkles, TrendingUp, AlertTriangle, Lightbulb } from 'lucide-react';
 import { FeedbackItem } from '@/data/mockFeedback';
 
@@ -5,32 +6,53 @@ interface AIInsightsProps {
   feedback: FeedbackItem[];
 }
 
+type Insight = {
+  title: string;
+  content: string;
+  type: 'warning' | 'info' | 'success';
+};
+
+type InsightPayload = {
+  insights: Insight[];
+  summary?: string;
+};
+
 export function AIInsights({ feedback }: AIInsightsProps) {
+  const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
+
   const criticalCount = feedback.filter(f => f.urgency === 'critical' && !f.resolved).length;
   const negativeCount = feedback.filter(f => f.sentiment === 'negative').length;
   const bugCount = feedback.filter(f => f.category === 'bug').length;
   const featureRequests = feedback.filter(f => f.category === 'feature').length;
 
-  const insights = [
-    {
-      icon: AlertTriangle,
-      title: 'Critical Issues',
-      content: `${criticalCount} unresolved critical tickets require immediate attention. API rate limiting and SSL issues are top priorities.`,
-      type: 'warning' as const,
-    },
-    {
-      icon: TrendingUp,
-      title: 'Trending Topics',
-      content: 'Performance issues (especially in APAC region) and documentation gaps are recurring themes this week.',
-      type: 'info' as const,
-    },
-    {
-      icon: Lightbulb,
-      title: 'Feature Opportunities',
-      content: `${featureRequests} feature requests identified. Top asks: improved cron scheduling, more AI models, and dark mode improvements.`,
-      type: 'success' as const,
-    },
-  ];
+  const fallbackInsights = useMemo<Insight[]>(
+    () => [
+      {
+        title: 'Critical Issues',
+        content: `${criticalCount} unresolved critical tickets require immediate attention.`,
+        type: 'warning',
+      },
+      {
+        title: 'Trending Topics',
+        content: 'Performance issues and documentation gaps are recurring themes this week.',
+        type: 'info',
+      },
+      {
+        title: 'Feature Opportunities',
+        content: `${featureRequests} feature requests identified. Focus on cron scheduling and dashboard UX.`,
+        type: 'success',
+      },
+    ],
+    [criticalCount, featureRequests]
+  );
+
+  const insights = useMemo(
+    () => serverInsights?.insights ?? fallbackInsights,
+    [serverInsights, fallbackInsights]
+  );
+  const summary =
+    serverInsights?.summary ??
+    `${negativeCount} negative and ${bugCount} bug reports analyzed from ${feedback.length} total feedback items.`;
 
   const typeStyles = {
     warning: 'border-l-warning bg-warning/5',
@@ -43,6 +65,32 @@ export function AIInsights({ feedback }: AIInsightsProps) {
     info: 'text-info',
     success: 'text-success',
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadInsights = async () => {
+      try {
+        const response = await fetch('/api/insights');
+        if (!response.ok) {
+          throw new Error('Failed to load AI insights');
+        }
+        const payload = (await response.json()) as InsightPayload;
+        if (isMounted && payload?.insights?.length) {
+          setServerInsights(payload);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setServerInsights(null);
+        }
+      }
+    };
+
+    void loadInsights();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-2">
@@ -63,7 +111,15 @@ export function AIInsights({ feedback }: AIInsightsProps) {
             className={`p-4 rounded-lg border-l-4 ${typeStyles[insight.type]}`}
           >
             <div className="flex items-center gap-2 mb-2">
-              <insight.icon className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+              {insight.type === 'warning' && (
+                <AlertTriangle className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+              )}
+              {insight.type === 'info' && (
+                <TrendingUp className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+              )}
+              {insight.type === 'success' && (
+                <Lightbulb className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+              )}
               <h4 className="font-medium text-sm">{insight.title}</h4>
             </div>
             <p className="text-sm text-muted-foreground">{insight.content}</p>
@@ -72,11 +128,7 @@ export function AIInsights({ feedback }: AIInsightsProps) {
       </div>
 
       <div className="mt-4 pt-4 border-t border-border/50">
-        <p className="text-xs text-muted-foreground">
-          <span className="text-primary font-medium">{negativeCount} negative</span> and{' '}
-          <span className="text-destructive font-medium">{bugCount} bug reports</span> analyzed from{' '}
-          <span className="font-medium text-foreground">{feedback.length} total feedback items</span>
-        </p>
+        <p className="text-xs text-muted-foreground">{summary}</p>
       </div>
     </div>
   );

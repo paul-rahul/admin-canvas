@@ -18,7 +18,6 @@ export function FeedbackDetail({ item, onClose, onResolve }: FeedbackDetailProps
   const sentimentConf = sentimentConfig[item.sentiment];
   const urgencyConf = urgencyConfig[item.urgency];
   const categoryConf = categoryConfig[item.category];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
       <div className="glass rounded-2xl w-full max-w-lg shadow-card border border-border/50 animate-slide-up">
@@ -69,14 +68,16 @@ export function FeedbackDetail({ item, onClose, onResolve }: FeedbackDetailProps
         </div>
 
         <div className="flex items-center gap-3 p-4 border-t border-border/50 bg-muted/20">
-          <Button variant="outline" className="flex-1" onClick={onClose}>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            View Original
-          </Button>
           {!item.resolved && (
             <Button className="flex-1 gradient-primary" onClick={() => onResolve(item.id)}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
               Mark Resolved
+            </Button>
+          )}
+          {item.resolved && (
+            <Button variant="outline" className="flex-1" onClick={onClose}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Back to Dashboard
             </Button>
           )}
         </div>

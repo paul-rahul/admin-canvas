@@ -1,0 +1,12 @@
+name = "admin-canvas"
+compatibility_date = "2024-10-01"
+pages_build_output_dir = "./dist"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "ANALYTICS_DB"
+database_name = "admin-canvas-analytics"
+database_id = "580d21ce-d42d-40f4-97d2-e7abc5d678d0"
+migrations_dir = "migrations"

@@ -71,3 +71,42 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Cloudflare Pages deployment
+
+This project includes Pages Functions that serve mock API endpoints backed by D1 and Workers AI.
+
+### Configure Cloudflare resources
+
+```sh
+# D1 database
+npx wrangler d1 create admin-canvas-analytics
+```
+
+Update the generated D1 ID in `wrangler.toml`. Workers AI is enabled through the `AI` binding already defined there.
+
+Apply the D1 migration:
+
+```sh
+npx wrangler d1 migrations apply admin-canvas-analytics
+```
+
+Seed the D1 metrics table (optional):
+
+```sh
+npm run seed:d1
+```
+
+### Run locally
+
+```sh
+ npm run build
+ npx wrangler pages dev ./dist
+```
+
+### Deploy
+
+```sh
+npm run build
+npx wrangler pages deploy ./dist --project-name admin-canvas
+```

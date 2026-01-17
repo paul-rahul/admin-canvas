@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MessageSquare, AlertTriangle, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { Header } from '@/components/dashboard/Header';
 import { FilterBar } from '@/components/dashboard/FilterBar';
@@ -11,8 +11,16 @@ import { AIInsights } from '@/components/dashboard/AIInsights';
 import { FeedbackDetail } from '@/components/dashboard/FeedbackDetail';
 import { mockFeedback, FeedbackItem, FeedbackSource, Urgency } from '@/data/mockFeedback';
 
+type Metrics = {
+  total: number;
+  critical: number;
+  resolved: number;
+  avgResponseTime: string;
+};
+
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>(mockFeedback);
+  const [serverMetrics, setServerMetrics] = useState<Metrics | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
   const [activeUrgency, setActiveUrgency] = useState<Urgency | 'all'>('all');
@@ -33,7 +41,7 @@ const Index = () => {
     });
   }, [feedback, searchQuery, activeSource, activeUrgency]);
 
-  const metrics = useMemo(() => {
+  const localMetrics = useMemo(() => {
     const total = feedback.length;
     const critical = feedback.filter((f) => f.urgency === 'critical' && !f.resolved).length;
     const resolved = feedback.filter((f) => f.resolved).length;
@@ -42,9 +50,49 @@ const Index = () => {
     return { total, critical, resolved, avgResponseTime };
   }, [feedback]);
 
+  const metrics = serverMetrics ?? localMetrics;
+
+  const loadFeedback = async () => {
+    try {
+      const response = await fetch('/api/feedback');
+      if (!response.ok) {
+        throw new Error('Failed to load feedback');
+      }
+      const payload = (await response.json()) as Array<
+        Omit<FeedbackItem, 'timestamp'> & { timestamp: string }
+      >;
+      setFeedback(
+        payload.map((item) => ({
+          ...item,
+          timestamp: new Date(item.timestamp),
+        }))
+      );
+    } catch (error) {
+      setFeedback(mockFeedback);
+    }
+  };
+
+  const loadMetrics = async () => {
+    try {
+      const response = await fetch('/api/metrics');
+      if (!response.ok) {
+        throw new Error('Failed to load metrics');
+      }
+      const payload = (await response.json()) as Metrics;
+      setServerMetrics(payload);
+    } catch (error) {
+      setServerMetrics(null);
+    }
+  };
+
+  useEffect(() => {
+    void loadFeedback();
+    void loadMetrics();
+  }, []);
+
   const handleRefresh = () => {
-    // Simulate refresh
-    setFeedback([...mockFeedback]);
+    void loadFeedback();
+    void loadMetrics();
   };
 
   const handleResolve = (id: string) => {

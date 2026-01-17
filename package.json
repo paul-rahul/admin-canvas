@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "seed:d1": "npx wrangler d1 execute admin-canvas-analytics --file=./scripts/seed-d1.sql",
     "test": "vitest run",
     "test:watch": "vitest"
   },

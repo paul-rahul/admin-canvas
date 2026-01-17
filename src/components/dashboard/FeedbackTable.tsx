@@ -1,5 +1,22 @@
+import { useEffect, useMemo, useState } from 'react';
 import { FeedbackItem, sourceConfig, sentimentConfig, urgencyConfig, categoryConfig } from '@/data/mockFeedback';
 import { Badge } from '@/components/ui/badge';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Headphones, MessageCircle, Github, Twitter, Mail, Users, CheckCircle2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -18,7 +35,50 @@ interface FeedbackTableProps {
   onSelect?: (item: FeedbackItem) => void;
 }
 
+const PAGE_SIZE_OPTIONS = [10, 50, 100];
+
+const getPageNumbers = (current: number, total: number) => {
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  const pages = new Set<number>([1, total, current]);
+  pages.add(Math.max(2, current - 1));
+  pages.add(Math.min(total - 1, current + 1));
+
+  const sorted = Array.from(pages).sort((a, b) => a - b);
+  const withEllipsis: Array<number | 'ellipsis'> = [];
+
+  sorted.forEach((page, index) => {
+    const prev = sorted[index - 1];
+    if (prev && page - prev > 1) {
+      withEllipsis.push('ellipsis');
+    }
+    withEllipsis.push(page);
+  });
+
+  return withEllipsis;
+};
+
 export function FeedbackTable({ feedback, onSelect }: FeedbackTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  const totalPages = Math.max(1, Math.ceil(feedback.length / pageSize));
+  const pageNumbers = useMemo(
+    () => getPageNumbers(currentPage, totalPages),
+    [currentPage, totalPages]
+  );
+
+  const pagedFeedback = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return feedback.slice(start, start + pageSize);
+  }, [currentPage, feedback, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
+
   return (
     <div className="glass rounded-xl overflow-hidden shadow-card opacity-0 animate-slide-up stagger-3">
       <div className="p-4 border-b border-border/50">
@@ -39,7 +99,7 @@ export function FeedbackTable({ feedback, onSelect }: FeedbackTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border/30">
-            {feedback.map((item) => {
+            {pagedFeedback.map((item) => {
               const sourceConf = sourceConfig[item.source];
               const IconComponent = sourceIcons[sourceConf.icon];
               const sentimentConf = sentimentConfig[item.sentiment];
@@ -105,6 +165,81 @@ export function FeedbackTable({ feedback, onSelect }: FeedbackTableProps) {
             })}
           </tbody>
         </table>
+      </div>
+      <div className="flex flex-col gap-3 border-t border-border/50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+        <p className="text-xs text-muted-foreground">
+          Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, feedback.length)} of{' '}
+          {feedback.length} tickets
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Rows per page</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[90px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Pagination className="w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setCurrentPage((prev) => Math.max(1, prev - 1));
+                  }}
+                />
+              </PaginationItem>
+              {pageNumbers.map((page, index) => {
+                if (page === 'ellipsis') {
+                  return (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  );
+                }
+
+                return (
+                  <PaginationItem key={`page-${page}`}>
+                    <PaginationLink
+                      href="#"
+                      isActive={page === currentPage}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setCurrentPage(page);
+                      }}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+                  }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       </div>
     </div>
   );
