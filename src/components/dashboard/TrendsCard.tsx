@@ -4,10 +4,10 @@ import { format } from 'date-fns';
 import { Activity } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { issueTypeConfig, sourceConfig, type FeedbackItem } from '@/data/mockFeedback';
+import { issueTypeConfig, sourceConfig, type FeedbackItem, type FeedbackSource } from '@/data/mockFeedback';
 
 type TimeRangeKey = '1d' | '7d' | '1m' | '3m' | '6m' | '1y';
-type SourceKey = keyof typeof sourceConfig | 'all';
+type SourceKey = FeedbackSource | 'all';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -71,6 +71,8 @@ interface TrendsCardProps {
   entries: FeedbackItem[];
   issueTypeId: string | null;
   issueTypeLabel: string | null;
+  sourceValue: SourceKey;
+  onSourceChange?: (source: SourceKey) => void;
   onTimeRangeSelect?: (range: { from: Date; to: Date }) => void;
 }
 
@@ -78,11 +80,13 @@ export function TrendsCard({
   entries,
   issueTypeId,
   issueTypeLabel,
+  sourceValue,
+  onSourceChange,
   onTimeRangeSelect,
 }: TrendsCardProps) {
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('7d');
-  const [selectedSource, setSelectedSource] = useState<SourceKey>('all');
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
+  const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const chartWidthRef = useRef(0);
@@ -349,7 +353,7 @@ export function TrendsCard({
         <div className="flex items-center justify-end gap-2">
           <Select
             value={selectedSource}
-            onValueChange={(value) => setSelectedSource(value as SourceKey)}
+            onValueChange={(value) => onSourceChange?.(value as SourceKey)}
           >
             <SelectTrigger className="h-7 w-[120px] text-[11px]">
               <SelectValue placeholder="Source" />
@@ -377,7 +381,7 @@ export function TrendsCard({
           </Select>
         </div>
         <div
-          className={["relative h-64 w-full", hasData ? "cursor-crosshair" : ""].join(' ')}
+          className={["relative h-80 w-full", hasData ? "cursor-crosshair" : ""].join(' ')}
           ref={chartRef}
           onMouseDown={(event) => {
             if (!chartRef.current || trendData.length === 0) return;

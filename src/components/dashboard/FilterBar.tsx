@@ -58,8 +58,8 @@ export function FilterBar({
 
   return (
     <div className="glass rounded-xl p-4 shadow-card opacity-0 animate-slide-up stagger-1">
-      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
-        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-[38%]">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground font-medium">Source:</span>
           <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
             {sources.map((source) => (
@@ -81,9 +81,7 @@ export function FilterBar({
           </div>
         </div>
 
-        <div className="h-5 w-px bg-border hidden md:block shrink-0" />
-
-        <div className="flex items-center gap-2 flex-nowrap flex-1 min-w-[320px]">
+        <div className="flex items-center gap-2 flex-nowrap">
           <span className="text-[11px] text-muted-foreground font-medium">Time:</span>
           <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap overflow-x-auto min-w-0">
             {times.map((time) => (

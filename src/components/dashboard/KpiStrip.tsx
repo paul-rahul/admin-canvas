@@ -12,7 +12,7 @@ interface KpiStripProps {
   filters: KpiFilters;
   entries?: Entry[];
   extraCard?: React.ReactNode | ((issueTypesCard: React.ReactNode) => React.ReactNode);
-  secondaryCard?: React.ReactNode;
+  secondaryCard?: React.ReactNode | null;
   onSourceSelect?: (source: string) => void;
   extraRightCard?: React.ReactNode;
 }
@@ -129,9 +129,13 @@ export function KpiStrip({
   const resolvedExtraCard =
     typeof extraCard === 'function' ? extraCard(issueTypesCard) : extraCard;
 
+  const hasSecondary = secondaryCard !== null;
+  const resolvedSecondaryCard = secondaryCard ?? issueTypesCard;
   const gridClassName = extraRightCard
     ? "grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-[4.5fr_2.5fr_2.5fr_2.5fr] auto-rows-fr"
-    : "grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-[4fr_2fr_5fr] auto-rows-fr";
+    : hasSecondary
+    ? "grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-[4fr_2fr_5fr] auto-rows-fr"
+    : "grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-[2.6fr_1.6fr] auto-rows-fr";
 
   return (
     <div className="space-y-3">
@@ -278,7 +282,7 @@ export function KpiStrip({
           </KpiCard>
         </div>
         {resolvedExtraCard && <div className="xl:col-span-1">{resolvedExtraCard}</div>}
-        <div className="xl:col-span-1">{secondaryCard ?? issueTypesCard}</div>
+        {hasSecondary && <div className="xl:col-span-1">{resolvedSecondaryCard}</div>}
         {extraRightCard && <div className="xl:col-span-1">{extraRightCard}</div>}
       </div>
     </div>

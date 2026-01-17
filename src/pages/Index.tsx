@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '@/components/dashboard/Header';
 import { FilterBar } from '@/components/dashboard/FilterBar';
 import { FeedbackTable } from '@/components/dashboard/FeedbackTable';
@@ -17,6 +17,8 @@ import { AlertTriangle } from 'lucide-react';
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearch = useDeferredValue(searchQuery);
+  const searchNeedle = useMemo(() => deferredSearch.trim().toLowerCase(), [deferredSearch]);
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
   const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
   const [selectedItem, setSelectedItem] = useState<FeedbackItem | null>(null);
@@ -51,6 +53,16 @@ const Index = () => {
     }, 250);
   };
 
+  const indexedFeedback = useMemo(
+    () =>
+      feedback.map((item) => ({
+        item,
+        timestampMs: item.timestamp?.getTime?.() ?? null,
+        searchText: `${item.title} ${item.content} ${item.author}`.toLowerCase(),
+      })),
+    [feedback]
+  );
+
   const filteredFeedback = useMemo(() => {
     const now = Date.now();
     const timeWindow =
@@ -62,23 +74,23 @@ const Index = () => {
         ? 30 * 24 * 60 * 60 * 1000
         : null;
 
-    return feedback.filter((item) => {
+    return indexedFeedback
+      .filter(({ item, timestampMs, searchText }) => {
       const matchesSearch =
-        searchQuery === '' ||
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.author.toLowerCase().includes(searchQuery.toLowerCase());
+        searchNeedle === '' || searchText.includes(searchNeedle);
 
       const matchesSource = activeSource === 'all' || item.source === activeSource;
       const matchesTime =
         activeTime === 'custom'
-          ? (!customRange.from || (item.timestamp && item.timestamp >= customRange.from)) &&
-            (!customRange.to || (item.timestamp && item.timestamp <= customRange.to))
-          : !timeWindow || (item.timestamp && now - item.timestamp.getTime() <= timeWindow);
+          ? (!customRange.from ||
+              (timestampMs !== null && timestampMs >= customRange.from.getTime())) &&
+            (!customRange.to || (timestampMs !== null && timestampMs <= customRange.to.getTime()))
+          : !timeWindow || (timestampMs !== null && now - timestampMs <= timeWindow);
 
       return matchesSearch && matchesSource && matchesTime;
-    });
-  }, [feedback, searchQuery, activeSource, activeTime, customRange]);
+    })
+      .map(({ item }) => item);
+  }, [indexedFeedback, searchNeedle, activeSource, activeTime, customRange]);
 
   const kpiFilters = useMemo(
     () => ({
@@ -93,23 +105,22 @@ const Index = () => {
                 (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000
             ),
       to: activeTime === 'custom' ? customRange.to : activeTime === 'all' ? null : new Date(),
-      search: searchQuery,
+      search: searchNeedle,
     }),
-    [activeSource, activeTime, searchQuery, customRange]
+    [activeSource, activeTime, searchNeedle, customRange]
   );
 
   const feedbackForEmerging = useMemo(() => {
-    return feedback.filter((item) => {
+    return indexedFeedback
+      .filter(({ item, searchText }) => {
       const matchesSearch =
-        searchQuery === '' ||
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.author.toLowerCase().includes(searchQuery.toLowerCase());
+        searchNeedle === '' || searchText.includes(searchNeedle);
 
       const matchesSource = activeSource === 'all' || item.source === activeSource;
       return matchesSearch && matchesSource;
-    });
-  }, [feedback, searchQuery, activeSource]);
+    })
+      .map(({ item }) => item);
+  }, [indexedFeedback, searchNeedle, activeSource]);
 
   const emergingThemes = useMemo(() => {
     const themes = Object.entries(issueTypeConfig).map(([theme_id, config]) => ({
@@ -217,53 +228,59 @@ const Index = () => {
         <Header onSearch={setSearchQuery} onRefresh={handleRefresh} />
 
         <main className="container mx-auto px-6 py-8 space-y-6">
-          {/* Filters */}
-          <FilterBar
-            activeSource={activeSource}
-            activeTime={activeTime}
-            onSourceChange={setActiveSource}
-            onTimeChange={(time) => {
-              markFiltering();
-              setActiveTime(time);
-              if (time === 'custom') {
-                setCustomRange(defaultCustomRange());
-              }
-            }}
-            customRange={customRange}
-            onCustomRangeChange={(range) => {
-              markFiltering();
-              setCustomRange(normalizeRange(range));
-              setActiveTime('custom');
-            }}
-            isFiltering={isFiltering}
-          />
+          <div className="grid gap-6 grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="space-y-6">
+              {/* Filters */}
+              <FilterBar
+                activeSource={activeSource}
+                activeTime={activeTime}
+                onSourceChange={setActiveSource}
+                onTimeChange={(time) => {
+                  markFiltering();
+                  setActiveTime(time);
+                  if (time === 'custom') {
+                    setCustomRange(defaultCustomRange());
+                  }
+                }}
+                customRange={customRange}
+                onCustomRangeChange={(range) => {
+                  markFiltering();
+                  setCustomRange(normalizeRange(range));
+                  setActiveTime('custom');
+                }}
+                isFiltering={isFiltering}
+              />
 
-          {/* KPI Strip */}
-          <KpiStrip
-            filters={kpiFilters}
-            entries={feedback}
-            onSourceSelect={(source) => {
-              setActiveSource(source as FeedbackSource);
-            }}
-            extraCard={(issueTypesCard) => (
-              <div className="grid h-full grid-rows-[1fr_auto] gap-4">
-                <KpiCard
-                  title="Critical Issues"
-                  value={criticalPercent}
-                  icon={AlertTriangle}
-                  tooltip="Computed as unresolved items where urgency is critical within the current time window."
-                  className="h-full"
-                >
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
-                    <span className="font-semibold text-foreground">unresolved</span> critical tickets require
-                    immediate attention.
-                  </p>
-                </KpiCard>
-                <div className="h-full">{issueTypesCard}</div>
-              </div>
-            )}
-            secondaryCard={
+              {/* KPI Strip */}
+              <KpiStrip
+                filters={kpiFilters}
+                entries={feedback}
+                onSourceSelect={(source) => {
+                  setActiveSource(source as FeedbackSource);
+                }}
+                extraCard={(issueTypesCard) => (
+                  <div className="grid h-full grid-rows-[1fr_auto] gap-4">
+                    <KpiCard
+                      title="Critical Issues"
+                      value={criticalPercent}
+                      icon={AlertTriangle}
+                      tooltip="Computed as unresolved items where urgency is critical within the current time window."
+                      className="h-full"
+                    >
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
+                        <span className="font-semibold text-foreground">unresolved</span> critical tickets require
+                        immediate attention.
+                      </p>
+                    </KpiCard>
+                    <div className="h-full">{issueTypesCard}</div>
+                  </div>
+                )}
+                secondaryCard={null}
+              />
+            </div>
+
+            <div className="space-y-6">
               <TrendsCard
                 entries={feedbackForEmerging}
                 issueTypeId={topIssueType}
@@ -273,14 +290,19 @@ const Index = () => {
                       topIssueType
                     : null
                 }
+                sourceValue={activeSource}
+                onSourceChange={(source) => {
+                  markFiltering();
+                  setActiveSource(source as FeedbackSource);
+                }}
                 onTimeRangeSelect={(range) => {
                   markFiltering();
                   setCustomRange(normalizeRange(range));
                   setActiveTime('custom');
                 }}
               />
-            }
-          />
+            </div>
+          </div>
 
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             <EmergingThemesCard
@@ -290,8 +312,6 @@ const Index = () => {
             />
             <AIInsights feedback={filteredFeedback} />
           </div>
-
-          {/* Charts Row */}
 
           {/* Feedback Table */}
           <FeedbackTable feedback={filteredFeedback} onSelect={setSelectedItem} />
