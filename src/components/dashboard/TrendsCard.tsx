@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { issueTypeConfig, sourceConfig, type FeedbackItem, type FeedbackSource } from '@/data/mockFeedback';
 
-type TimeRangeKey = '1d' | '7d' | '1m' | '3m' | '6m' | '1y';
+type TimeRangeKey = '1h' | '7d' | '1m' | '3m' | '6m' | '1y';
 type SourceKey = FeedbackSource | 'all';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -16,12 +16,12 @@ const timeRanges: Record<
   TimeRangeKey,
   { label: string; windowMs: number; bucketMs: number; formatString: string }
 > = {
-  '1d': { label: '1 day', windowMs: DAY_MS, bucketMs: 60 * 60 * 1000, formatString: 'ha' },
-  '7d': { label: '7 days', windowMs: 7 * DAY_MS, bucketMs: DAY_MS, formatString: 'MMM d' },
-  '1m': { label: '1 month', windowMs: 30 * DAY_MS, bucketMs: 7 * DAY_MS, formatString: 'MMM d' },
+  '1h': { label: 'Hourly', windowMs: DAY_MS, bucketMs: 60 * 60 * 1000, formatString: 'ha' },
+  '7d': { label: '7 days', windowMs: 7 * DAY_MS, bucketMs: 6 * 60 * 60 * 1000, formatString: 'MMM d ha' },
+  '1m': { label: '1 month', windowMs: 30 * DAY_MS, bucketMs: DAY_MS, formatString: 'MMM d' },
   '3m': { label: '3 months', windowMs: 90 * DAY_MS, bucketMs: 7 * DAY_MS, formatString: 'MMM d' },
-  '6m': { label: '6 months', windowMs: 180 * DAY_MS, bucketMs: 14 * DAY_MS, formatString: 'MMM d' },
-  '1y': { label: '1 year', windowMs: 365 * DAY_MS, bucketMs: 30 * DAY_MS, formatString: 'MMM d' },
+  '6m': { label: '6 months', windowMs: 180 * DAY_MS, bucketMs: 7 * DAY_MS, formatString: 'MMM d' },
+  '1y': { label: '1 year', windowMs: 365 * DAY_MS, bucketMs: 7 * DAY_MS, formatString: 'MMM d' },
 };
 
 const normalizeUrgency = (value?: string | null) => {
@@ -97,12 +97,15 @@ export function TrendsCard({
 }: TrendsCardProps) {
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+  const [lastPresetRangeKey, setLastPresetRangeKey] = useState<TimeRangeKey>('7d');
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const chartWidthRef = useRef(0);
   const chartRectRef = useRef<{ left: number; width: number } | null>(null);
-  const plotRectRef = useRef<{ left: number; width: number } | null>(null);
+  const plotRectRef = useRef<{ left: number; width: number; top: number; height: number } | null>(
+    null
+  );
   const dragStartIndexRef = useRef<number | null>(null);
   const dragEndIndexRef = useRef<number | null>(null);
   const isSelectingRef = useRef(false);
@@ -111,44 +114,53 @@ export function TrendsCard({
   const rafRef = useRef<number | null>(null);
 
   const syncedRangeKey = useMemo<TimeRangeKey>(() => {
-    if (timeFilter === '24h') return '1d';
+    if (timeFilter === '24h') return '1h';
     if (timeFilter === '7d') return '7d';
     if (timeFilter === '30d') return '1m';
     if (timeFilter === 'all') return '1y';
     if (timeFilter === 'custom' && customRange?.from && customRange?.to) {
       const windowMs = Math.max(1, customRange.to.getTime() - customRange.from.getTime());
-      if (windowMs <= 2 * DAY_MS) return '1d';
+      if (windowMs <= 2 * DAY_MS) return '1h';
       if (windowMs <= 14 * DAY_MS) return '7d';
       if (windowMs <= 60 * DAY_MS) return '1m';
-      if (windowMs <= 180 * DAY_MS) return '3m';
-      if (windowMs <= 365 * DAY_MS) return '6m';
+      if (windowMs <= 90 * DAY_MS) return '3m';
+      if (windowMs <= 180 * DAY_MS) return '6m';
       return '1y';
     }
     return '7d';
   }, [timeFilter, customRange]);
 
+  useEffect(() => {
+    if (timeFilter !== 'custom') {
+      setLastPresetRangeKey(syncedRangeKey);
+    }
+  }, [timeFilter, syncedRangeKey]);
+
+  useEffect(() => {
+    if (timeFilter === 'custom' && customRange?.from && customRange?.to) {
+      setLastPresetRangeKey(syncedRangeKey);
+    }
+  }, [timeFilter, customRange, syncedRangeKey]);
+
+  const displayRangeKey = timeFilter === 'custom' ? lastPresetRangeKey : syncedRangeKey;
+
   const trendData = useMemo<TrendPoint[]>(() => {
     if (!issueTypeId) return [];
     const resolveBucketMs = (rangeMs: number) => {
-      if (rangeMs <= 2 * DAY_MS) return 60 * 60 * 1000;
-      if (rangeMs <= 14 * DAY_MS) return DAY_MS;
-      if (rangeMs <= 60 * DAY_MS) return 7 * DAY_MS;
-      if (rangeMs <= 180 * DAY_MS) return 14 * DAY_MS;
+      if (rangeMs <= DAY_MS) return 60 * 60 * 1000;
+      if (rangeMs <= 31 * DAY_MS) return DAY_MS;
+      if (rangeMs <= 180 * DAY_MS) return 7 * DAY_MS;
       return 30 * DAY_MS;
     };
 
     const customFrom = customRange?.from?.getTime?.() ?? null;
     const customTo = customRange?.to?.getTime?.() ?? null;
     const useCustom = timeFilter === 'custom' && customFrom !== null && customTo !== null;
-    const rangeKey = syncedRangeKey;
+    const rangeKey = timeFilter === 'custom' ? lastPresetRangeKey : syncedRangeKey;
     const baseConfig = timeRanges[rangeKey];
     const windowMs = useCustom ? Math.max(1, customTo - customFrom) : baseConfig.windowMs;
-    const bucketMs = useCustom ? resolveBucketMs(windowMs) : baseConfig.bucketMs;
-    const formatString = useCustom
-      ? bucketMs <= DAY_MS
-        ? 'ha'
-        : 'MMM d'
-      : baseConfig.formatString;
+    const bucketMs = useCustom ? baseConfig.bucketMs : baseConfig.bucketMs;
+    const formatString = useCustom ? baseConfig.formatString : baseConfig.formatString;
 
     let start = 0;
     let endMs = 0;
@@ -202,7 +214,7 @@ export function TrendsCard({
       startMs: bucket.start,
       endMs: bucket.start + bucketMs,
     }));
-  }, [entries, issueTypeId, selectedSource, timeFilter, syncedRangeKey, customRange]);
+  }, [entries, issueTypeId, selectedSource, timeFilter, syncedRangeKey, lastPresetRangeKey, customRange]);
 
   const hasData = trendData.some((point) => point.count > 0);
 
@@ -219,46 +231,6 @@ export function TrendsCard({
     const normalizedEndIndex = trendData.length - 1 - endIndex;
     return { startIndex, endIndex: Math.max(startIndex, normalizedEndIndex) };
   }, [selectedRangeMs, trendData]);
-
-  const summary = useMemo(() => {
-    if (!selectedRangeMs || !derivedRange) return null;
-    const { from, to } = selectedRangeMs;
-    const entriesInRange = entries.filter((entry) => {
-      if (entry.issueType !== issueTypeId) return false;
-      if (selectedSource !== 'all' && entry.source !== selectedSource) return false;
-      const timestamp = entry.timestamp?.getTime?.() ?? null;
-      if (!timestamp) return false;
-      return timestamp >= from && timestamp <= to;
-    });
-
-    const total = entriesInRange.length;
-    const bucketCount =
-      derivedRange.endIndex >= derivedRange.startIndex
-        ? derivedRange.endIndex - derivedRange.startIndex + 1
-        : 0;
-    const avgPerBucket = bucketCount ? total / bucketCount : 0;
-
-    const sourceCounts: Record<string, number> = {};
-    const issueTypeCounts: Record<string, number> = {};
-    entriesInRange.forEach((entry) => {
-      if (entry.source) {
-        sourceCounts[entry.source] = (sourceCounts[entry.source] ?? 0) + 1;
-      }
-      if (entry.issueType) {
-        issueTypeCounts[entry.issueType] = (issueTypeCounts[entry.issueType] ?? 0) + 1;
-      }
-    });
-
-    const topSource = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])[0] ?? null;
-    const topIssueType = Object.entries(issueTypeCounts).sort((a, b) => b[1] - a[1])[0] ?? null;
-
-    return {
-      total,
-      avgPerBucket,
-      topSource,
-      topIssueType,
-    };
-  }, [derivedRange, entries, issueTypeId, selectedRangeMs, selectedSource]);
 
   useEffect(() => {
     dragStartIndexRef.current = null;
@@ -301,9 +273,16 @@ export function TrendsCard({
         plotRectRef.current = {
           left: Math.max(0, gridRect.left - containerRect.left),
           width: Math.max(0, gridRect.width),
+          top: Math.max(0, gridRect.top - containerRect.top),
+          height: Math.max(0, gridRect.height),
         };
       } else {
-        plotRectRef.current = { left: 0, width: containerRect.width };
+        plotRectRef.current = {
+          left: 0,
+          width: containerRect.width,
+          top: 0,
+          height: containerRect.height,
+        };
       }
     };
     updatePlotRect();
@@ -335,15 +314,23 @@ export function TrendsCard({
       plotRectRef.current = {
         left: Math.max(0, gridRect.left - containerRect.left),
         width: Math.max(0, gridRect.width),
+        top: Math.max(0, gridRect.top - containerRect.top),
+        height: Math.max(0, gridRect.height),
       };
     } else {
-      plotRectRef.current = { left: 0, width: containerRect.width };
+      plotRectRef.current = {
+        left: 0,
+        width: containerRect.width,
+        top: 0,
+        height: containerRect.height,
+      };
     }
   };
 
   const updateOverlayByIndexRange = (startIndex: number, endIndex: number) => {
     if (!overlayRef.current || trendData.length === 0) return;
-    const plotRect = plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0 };
+    const plotRect =
+      plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0, top: 0, height: 0 };
     const width = plotRect.width;
     if (!width) return;
     const start = Math.min(startIndex, endIndex);
@@ -358,10 +345,13 @@ export function TrendsCard({
     overlayRef.current.style.opacity = '1';
     overlayRef.current.style.left = `${left}px`;
     overlayRef.current.style.width = `${overlayWidth}px`;
+    overlayRef.current.style.top = `${plotRect.top}px`;
+    overlayRef.current.style.height = `${plotRect.height}px`;
   };
 
   const updateOverlayPixels = (startPx: number, endPx: number) => {
-    const plotRect = plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0 };
+    const plotRect =
+      plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0, top: 0, height: 0 };
     const plotWidth = plotRect.width;
     if (!plotWidth || trendData.length === 0) return;
     const bucketWidth = plotWidth / trendData.length;
@@ -377,7 +367,7 @@ export function TrendsCard({
 
   const getPlotMetrics = (clientX: number) => {
     const rect = chartRectRef.current ?? { left: 0, width: chartWidthRef.current || 1 };
-    const plotRect = plotRectRef.current ?? { left: 0, width: rect.width };
+    const plotRect = plotRectRef.current ?? { left: 0, width: rect.width, top: 0, height: 0 };
     const plotWidth = Math.max(1, plotRect.width);
     const pixel = Math.min(plotWidth, Math.max(0, clientX - rect.left - plotRect.left));
     return { pixel, plotWidth };
@@ -421,7 +411,7 @@ export function TrendsCard({
       <div className="absolute right-6 top-6">
         <Button
           onClick={() => setIsInsightsOpen(true)}
-          className="h-7 px-3 text-[11px] font-semibold bg-warning text-warning-foreground hover:bg-warning/90"
+          className="h-9 px-5 text-sm font-semibold bg-warning text-warning-foreground hover:bg-warning/90 shadow-md shadow-warning/30"
         >
           AI Insights
         </Button>
@@ -445,7 +435,7 @@ export function TrendsCard({
             </SelectContent>
           </Select>
           <Select
-            value={syncedRangeKey}
+            value={displayRangeKey}
             onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}
           >
             <SelectTrigger className="h-7 w-[120px] text-[11px]">
@@ -462,13 +452,14 @@ export function TrendsCard({
         </div>
         <div
           className={[
-            "relative h-80 w-full min-w-0",
+            "relative h-96 w-full min-w-0 select-none",
             hasData ? "cursor-crosshair" : "",
             isInsightsOpen ? "pointer-events-none" : "",
           ].join(' ')}
           ref={chartRef}
           onMouseDown={(event) => {
             if (!chartRef.current || trendData.length === 0) return;
+            window.getSelection?.()?.removeAllRanges();
             const rect = chartRef.current.getBoundingClientRect();
             chartRectRef.current = { left: rect.left, width: rect.width };
             chartWidthRef.current = rect.width;
@@ -507,11 +498,13 @@ export function TrendsCard({
             ) {
               isSelectingRef.current = false;
               hideOverlay();
+              window.getSelection?.()?.removeAllRanges();
               return;
             }
             if (dragPixelStartRef.current === null || dragPixelEndRef.current === null) {
               isSelectingRef.current = false;
               hideOverlay();
+              window.getSelection?.()?.removeAllRanges();
               return;
             }
             const plotWidth = plotRectRef.current?.width ?? chartRef.current?.clientWidth ?? 1;
@@ -540,6 +533,9 @@ export function TrendsCard({
                 to: new Date(endPoint.endMs - 1),
               });
             }
+            setSelectedRangeMs(null);
+            hideOverlay();
+            window.getSelection?.()?.removeAllRanges();
           }}
           onMouseLeave={() => {
             if (!isSelectingRef.current) return;
@@ -549,6 +545,7 @@ export function TrendsCard({
             dragPixelStartRef.current = null;
             dragPixelEndRef.current = null;
             hideOverlay();
+            window.getSelection?.()?.removeAllRanges();
           }}
         >
           {hasData ? (
@@ -600,8 +597,15 @@ export function TrendsCard({
           {hasData && (
             <div
               ref={overlayRef}
-              className="absolute inset-y-0 z-20 rounded-md border border-primary/50 pointer-events-none"
-              style={{ left: 0, width: 0, opacity: 0, backgroundColor: 'hsl(var(--primary) / 0.2)' }}
+              className="absolute z-20 rounded-md border border-primary/50 pointer-events-none"
+              style={{
+                left: 0,
+                width: 0,
+                opacity: 0,
+                top: 0,
+                height: 0,
+                backgroundColor: 'hsl(var(--primary) / 0.2)',
+              }}
             />
           )}
         </div>
@@ -624,34 +628,6 @@ export function TrendsCard({
               ) : (
                 <div className="text-xs text-muted-foreground">No insights available.</div>
               )}
-            </div>
-          </div>
-        )}
-        {summary && (
-          <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground sm:grid-cols-2">
-            <div className="flex items-center gap-2">
-              <span>Total tickets</span>
-              <span className="font-semibold text-foreground">{summary.total}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Avg per bucket</span>
-              <span className="font-semibold text-foreground">{summary.avgPerBucket.toFixed(1)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Top source</span>
-              <span className="font-semibold text-foreground">
-                {summary.topSource
-                  ? `${sourceConfig[summary.topSource[0] as keyof typeof sourceConfig]?.label ?? summary.topSource[0]} (${summary.topSource[1]})`
-                  : '—'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Top issue type</span>
-              <span className="font-semibold text-foreground">
-                {summary.topIssueType
-                  ? `${issueTypeConfig[summary.topIssueType[0] as keyof typeof issueTypeConfig]?.label ?? summary.topIssueType[0]} (${summary.topIssueType[1]})`
-                  : '—'}
-              </span>
             </div>
           </div>
         )}

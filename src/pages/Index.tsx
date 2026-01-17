@@ -64,6 +64,16 @@ const Index = () => {
     [feedback]
   );
 
+  const baseFiltered = useMemo(() => {
+    return indexedFeedback
+      .filter(({ item, searchText }) => {
+        const matchesSearch = searchNeedle === '' || searchText.includes(searchNeedle);
+        const matchesSource = activeSource === 'all' || item.source === activeSource;
+        return matchesSearch && matchesSource;
+      })
+      .map(({ item }) => item);
+  }, [indexedFeedback, searchNeedle, activeSource]);
+
   const filteredFeedback = useMemo(() => {
     const now = Date.now();
     const timeWindow =
@@ -75,23 +85,18 @@ const Index = () => {
         ? 30 * 24 * 60 * 60 * 1000
         : null;
 
-    return indexedFeedback
-      .filter(({ item, timestampMs, searchText }) => {
-      const matchesSearch =
-        searchNeedle === '' || searchText.includes(searchNeedle);
-
-      const matchesSource = activeSource === 'all' || item.source === activeSource;
-      const matchesTime =
-        activeTime === 'custom'
-          ? (!customRange.from ||
-              (timestampMs !== null && timestampMs >= customRange.from.getTime())) &&
-            (!customRange.to || (timestampMs !== null && timestampMs <= customRange.to.getTime()))
-          : !timeWindow || (timestampMs !== null && now - timestampMs <= timeWindow);
-
-      return matchesSearch && matchesSource && matchesTime;
-    })
-      .map(({ item }) => item);
-  }, [indexedFeedback, searchNeedle, activeSource, activeTime, customRange]);
+    return baseFiltered.filter((item) => {
+      const timestampMs = item.timestamp?.getTime?.() ?? null;
+      if (activeTime === 'custom') {
+        return (
+          (!customRange.from ||
+            (timestampMs !== null && timestampMs >= customRange.from.getTime())) &&
+          (!customRange.to || (timestampMs !== null && timestampMs <= customRange.to.getTime()))
+        );
+      }
+      return !timeWindow || (timestampMs !== null && now - timestampMs <= timeWindow);
+    });
+  }, [baseFiltered, activeTime, customRange]);
 
   const kpiFilters = useMemo(
     () => ({
@@ -111,17 +116,7 @@ const Index = () => {
     [activeSource, activeTime, searchNeedle, customRange]
   );
 
-  const feedbackForEmerging = useMemo(() => {
-    return indexedFeedback
-      .filter(({ item, searchText }) => {
-      const matchesSearch =
-        searchNeedle === '' || searchText.includes(searchNeedle);
-
-      const matchesSource = activeSource === 'all' || item.source === activeSource;
-      return matchesSearch && matchesSource;
-    })
-      .map(({ item }) => item);
-  }, [indexedFeedback, searchNeedle, activeSource]);
+  const feedbackForEmerging = baseFiltered;
 
   const emergingThemes = useMemo(() => {
     const themes = Object.entries(issueTypeConfig).map(([theme_id, config]) => ({
@@ -140,17 +135,26 @@ const Index = () => {
     return computeEmergingThemes(feedbackForEmerging, themes, endDate, windowDays, 3);
   }, [feedbackForEmerging, activeTime, customRange]);
 
-  const criticalPercent = useMemo(() => {
+  const { criticalPercent, criticalCount } = useMemo(() => {
     const total = filteredFeedback.length;
-    if (!total) return '—';
-    const criticalCount = filteredFeedback.filter((item) => item.urgency === 'critical').length;
-    return formatPercent((criticalCount / total) * 100);
+    if (!total) {
+      return { criticalPercent: '—', criticalCount: 0 };
+    }
+    let criticalTotal = 0;
+    let criticalOpen = 0;
+    filteredFeedback.forEach((item) => {
+      if (item.urgency === 'critical') {
+        criticalTotal += 1;
+        if (!item.resolved) {
+          criticalOpen += 1;
+        }
+      }
+    });
+    return {
+      criticalPercent: formatPercent((criticalTotal / total) * 100),
+      criticalCount: criticalOpen,
+    };
   }, [filteredFeedback]);
-
-  const criticalCount = useMemo(
-    () => filteredFeedback.filter((item) => item.urgency === 'critical' && !item.resolved).length,
-    [filteredFeedback]
-  );
 
   const topIssueType = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -304,8 +308,13 @@ const Index = () => {
                 onTimeFilterChange={(rangeKey) => {
                   markFiltering();
                   const now = new Date();
-                  if (rangeKey === '1d' || rangeKey === '7d' || rangeKey === '1m') {
-                    const nextTime = rangeKey === '1d' ? '24h' : rangeKey === '7d' ? '7d' : '30d';
+                  if (rangeKey === '1h' || rangeKey === '7d' || rangeKey === '1m') {
+                    const nextTime =
+                      rangeKey === '1h'
+                        ? '24h'
+                        : rangeKey === '7d'
+                        ? '7d'
+                        : '30d';
                     setActiveTime(nextTime);
                     setTrendSelectionKey((prev) => prev + 1);
                     return;

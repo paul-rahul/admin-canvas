@@ -63,7 +63,9 @@ export function IssueTrendModal({
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const chartWidthRef = useRef(0);
   const chartRectRef = useRef<{ left: number; width: number } | null>(null);
-  const plotRectRef = useRef<{ left: number; width: number } | null>(null);
+  const plotRectRef = useRef<{ left: number; width: number; top: number; height: number } | null>(
+    null
+  );
   const dragStartIndexRef = useRef<number | null>(null);
   const dragEndIndexRef = useRef<number | null>(null);
   const isSelectingRef = useRef(false);
@@ -202,9 +204,16 @@ export function IssueTrendModal({
         plotRectRef.current = {
           left: Math.max(0, gridRect.left - containerRect.left),
           width: Math.max(0, gridRect.width),
+          top: Math.max(0, gridRect.top - containerRect.top),
+          height: Math.max(0, gridRect.height),
         };
       } else {
-        plotRectRef.current = { left: 0, width: containerRect.width };
+        plotRectRef.current = {
+          left: 0,
+          width: containerRect.width,
+          top: 0,
+          height: containerRect.height,
+        };
       }
     };
     updatePlotRect();
@@ -236,15 +245,23 @@ export function IssueTrendModal({
       plotRectRef.current = {
         left: Math.max(0, gridRect.left - containerRect.left),
         width: Math.max(0, gridRect.width),
+        top: Math.max(0, gridRect.top - containerRect.top),
+        height: Math.max(0, gridRect.height),
       };
     } else {
-      plotRectRef.current = { left: 0, width: containerRect.width };
+      plotRectRef.current = {
+        left: 0,
+        width: containerRect.width,
+        top: 0,
+        height: containerRect.height,
+      };
     }
   };
 
   const updateOverlayByIndexRange = (startIndex: number, endIndex: number) => {
     if (!overlayRef.current || trendData.length === 0) return;
-    const plotRect = plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0 };
+    const plotRect =
+      plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0, top: 0, height: 0 };
     const width = plotRect.width;
     if (!width) return;
     const start = Math.min(startIndex, endIndex);
@@ -259,10 +276,13 @@ export function IssueTrendModal({
     overlayRef.current.style.opacity = '1';
     overlayRef.current.style.left = `${left}px`;
     overlayRef.current.style.width = `${overlayWidth}px`;
+    overlayRef.current.style.top = `${plotRect.top}px`;
+    overlayRef.current.style.height = `${plotRect.height}px`;
   };
 
   const updateOverlayPixels = (startPx: number, endPx: number) => {
-    const plotRect = plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0 };
+    const plotRect =
+      plotRectRef.current ?? { left: 0, width: chartWidthRef.current || 0, top: 0, height: 0 };
     const plotWidth = plotRect.width;
     if (!plotWidth) return;
     const bucketWidth = plotWidth / trendData.length;
@@ -278,7 +298,7 @@ export function IssueTrendModal({
 
   const getPlotMetrics = (clientX: number) => {
     const rect = chartRectRef.current ?? { left: 0, width: chartWidthRef.current || 1 };
-    const plotRect = plotRectRef.current ?? { left: 0, width: rect.width };
+    const plotRect = plotRectRef.current ?? { left: 0, width: rect.width, top: 0, height: 0 };
     const plotWidth = Math.max(1, plotRect.width);
     const pixel = Math.min(plotWidth, Math.max(0, clientX - rect.left - plotRect.left));
     return { pixel, plotWidth };
@@ -338,7 +358,7 @@ export function IssueTrendModal({
           </p>
         </DialogHeader>
 
-        <div className="relative h-72 w-full" ref={chartRef}>
+        <div className="relative h-72 w-full select-none" ref={chartRef}>
           {hasData ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData}>
@@ -399,8 +419,15 @@ export function IssueTrendModal({
           {hasData && (
             <div
               ref={overlayRef}
-              className="absolute inset-y-0 z-20 rounded-md border border-primary/50 pointer-events-none"
-              style={{ left: 0, width: 0, opacity: 0, backgroundColor: 'hsl(var(--primary) / 0.2)' }}
+              className="absolute z-20 rounded-md border border-primary/50 pointer-events-none"
+              style={{
+                left: 0,
+                width: 0,
+                opacity: 0,
+                top: 0,
+                height: 0,
+                backgroundColor: 'hsl(var(--primary) / 0.2)',
+              }}
             />
           )}
           {hasData && (
@@ -409,6 +436,7 @@ export function IssueTrendModal({
               role="presentation"
               onMouseDown={(event) => {
                 if (!chartRef.current || trendData.length === 0) return;
+                window.getSelection?.()?.removeAllRanges();
                 const rect = chartRef.current.getBoundingClientRect();
                 chartRectRef.current = { left: rect.left, width: rect.width };
                 chartWidthRef.current = rect.width;
@@ -447,11 +475,13 @@ export function IssueTrendModal({
                 ) {
                   isSelectingRef.current = false;
                   hideOverlay();
+                  window.getSelection?.()?.removeAllRanges();
                   return;
                 }
                 if (dragPixelStartRef.current === null || dragPixelEndRef.current === null) {
                   isSelectingRef.current = false;
                   hideOverlay();
+                  window.getSelection?.()?.removeAllRanges();
                   return;
                 }
                 const plotWidth = plotRectRef.current?.width ?? chartRef.current?.clientWidth ?? 1;
@@ -480,6 +510,9 @@ export function IssueTrendModal({
                     to: new Date(endPoint.endMs - 1),
                   });
                 }
+                setSelectedRangeMs(null);
+                hideOverlay();
+                window.getSelection?.()?.removeAllRanges();
               }}
               onMouseLeave={() => {
                 if (!isSelectingRef.current) return;
@@ -489,6 +522,7 @@ export function IssueTrendModal({
                 dragPixelStartRef.current = null;
                 dragPixelEndRef.current = null;
                 hideOverlay();
+                window.getSelection?.()?.removeAllRanges();
               }}
             />
           )}
