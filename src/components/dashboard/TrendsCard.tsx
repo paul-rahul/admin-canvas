@@ -3,6 +3,7 @@ import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } f
 import { format } from 'date-fns';
 import { Activity } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { issueTypeConfig, sourceConfig, type FeedbackItem, type FeedbackSource } from '@/data/mockFeedback';
 
@@ -73,6 +74,10 @@ interface TrendsCardProps {
   issueTypeLabel: string | null;
   sourceValue: SourceKey;
   onSourceChange?: (source: SourceKey) => void;
+  timeFilter?: '24h' | '7d' | '30d' | 'all' | 'custom';
+  customRange?: { from: Date | null; to: Date | null };
+  onTimeFilterChange?: (timeRange: TimeRangeKey) => void;
+  clearSelectionKey?: number;
   onTimeRangeSelect?: (range: { from: Date; to: Date }) => void;
 }
 
@@ -82,9 +87,12 @@ export function TrendsCard({
   issueTypeLabel,
   sourceValue,
   onSourceChange,
+  timeFilter = '7d',
+  customRange,
+  onTimeFilterChange,
+  clearSelectionKey,
   onTimeRangeSelect,
 }: TrendsCardProps) {
-  const [timeRange, setTimeRange] = useState<TimeRangeKey>('7d');
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
@@ -99,24 +107,68 @@ export function TrendsCard({
   const dragPixelEndRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const syncedRangeKey = useMemo<TimeRangeKey>(() => {
+    if (timeFilter === '24h') return '1d';
+    if (timeFilter === '7d') return '7d';
+    if (timeFilter === '30d') return '1m';
+    if (timeFilter === 'all') return '1y';
+    if (timeFilter === 'custom' && customRange?.from && customRange?.to) {
+      const windowMs = Math.max(1, customRange.to.getTime() - customRange.from.getTime());
+      if (windowMs <= 2 * DAY_MS) return '1d';
+      if (windowMs <= 14 * DAY_MS) return '7d';
+      if (windowMs <= 60 * DAY_MS) return '1m';
+      if (windowMs <= 180 * DAY_MS) return '3m';
+      if (windowMs <= 365 * DAY_MS) return '6m';
+      return '1y';
+    }
+    return '7d';
+  }, [timeFilter, customRange]);
+
   const trendData = useMemo<TrendPoint[]>(() => {
     if (!issueTypeId) return [];
-    const config = timeRanges[timeRange];
-    const now = new Date();
-    const alignedEnd = new Date(now);
-    if (config.bucketMs >= DAY_MS) {
-      alignedEnd.setHours(0, 0, 0, 0);
-      alignedEnd.setTime(alignedEnd.getTime() + DAY_MS);
-    } else {
-      alignedEnd.setMinutes(0, 0, 0);
-      alignedEnd.setTime(alignedEnd.getTime() + 60 * 60 * 1000);
-    }
-    const endMs = alignedEnd.getTime();
-    const start = endMs - config.windowMs;
-    const bucketCount = Math.max(1, Math.ceil(config.windowMs / config.bucketMs));
+    const resolveBucketMs = (rangeMs: number) => {
+      if (rangeMs <= 2 * DAY_MS) return 60 * 60 * 1000;
+      if (rangeMs <= 14 * DAY_MS) return DAY_MS;
+      if (rangeMs <= 60 * DAY_MS) return 7 * DAY_MS;
+      if (rangeMs <= 180 * DAY_MS) return 14 * DAY_MS;
+      return 30 * DAY_MS;
+    };
 
+    const customFrom = customRange?.from?.getTime?.() ?? null;
+    const customTo = customRange?.to?.getTime?.() ?? null;
+    const useCustom = timeFilter === 'custom' && customFrom !== null && customTo !== null;
+    const rangeKey = syncedRangeKey;
+    const baseConfig = timeRanges[rangeKey];
+    const windowMs = useCustom ? Math.max(1, customTo - customFrom) : baseConfig.windowMs;
+    const bucketMs = useCustom ? resolveBucketMs(windowMs) : baseConfig.bucketMs;
+    const formatString = useCustom
+      ? bucketMs <= DAY_MS
+        ? 'ha'
+        : 'MMM d'
+      : baseConfig.formatString;
+
+    let start = 0;
+    let endMs = 0;
+    if (useCustom) {
+      start = customFrom;
+      endMs = customTo;
+    } else {
+      const now = new Date();
+      const alignedEnd = new Date(now);
+      if (bucketMs >= DAY_MS) {
+        alignedEnd.setHours(0, 0, 0, 0);
+        alignedEnd.setTime(alignedEnd.getTime() + DAY_MS);
+      } else {
+        alignedEnd.setMinutes(0, 0, 0);
+        alignedEnd.setTime(alignedEnd.getTime() + 60 * 60 * 1000);
+      }
+      endMs = alignedEnd.getTime();
+      start = endMs - windowMs;
+    }
+
+    const bucketCount = Math.max(1, Math.ceil((endMs - start) / bucketMs));
     const buckets = Array.from({ length: bucketCount }, (_, index) => ({
-      start: start + index * config.bucketMs,
+      start: start + index * bucketMs,
       count: 0,
       urgencySum: 0,
       urgencyCount: 0,
@@ -129,7 +181,7 @@ export function TrendsCard({
       if (!timestamp || timestamp < start || timestamp >= endMs) return;
       const bucketIndex = Math.min(
         buckets.length - 1,
-        Math.max(0, Math.floor((timestamp - start) / config.bucketMs))
+        Math.max(0, Math.floor((timestamp - start) / bucketMs))
       );
       const bucket = buckets[bucketIndex];
       bucket.count += 1;
@@ -141,13 +193,13 @@ export function TrendsCard({
     });
 
     return buckets.map((bucket) => ({
-      label: format(new Date(bucket.start), config.formatString),
+      label: format(new Date(bucket.start), formatString),
       count: bucket.count,
       avgUrgency: bucket.urgencyCount ? bucket.urgencySum / bucket.urgencyCount : null,
       startMs: bucket.start,
-      endMs: bucket.start + config.bucketMs,
+      endMs: bucket.start + bucketMs,
     }));
-  }, [entries, issueTypeId, selectedSource, timeRange]);
+  }, [entries, issueTypeId, selectedSource, timeFilter, syncedRangeKey, customRange]);
 
   const hasData = trendData.some((point) => point.count > 0);
 
@@ -214,7 +266,18 @@ export function TrendsCard({
     if (overlayRef.current) {
       overlayRef.current.style.opacity = '0';
     }
-  }, [issueTypeId, timeRange]);
+  }, [issueTypeId, timeFilter, customRange]);
+
+  const hideOverlay = () => {
+    if (!overlayRef.current) return;
+    overlayRef.current.style.opacity = '0';
+  };
+
+  useEffect(() => {
+    if (!clearSelectionKey) return;
+    setSelectedRangeMs(null);
+    hideOverlay();
+  }, [clearSelectionKey]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -315,11 +378,6 @@ export function TrendsCard({
     return Math.min(trendData.length - 1, Math.max(0, index));
   };
 
-  const hideOverlay = () => {
-    if (!overlayRef.current) return;
-    overlayRef.current.style.opacity = '0';
-  };
-
   useEffect(() => {
     if (!selectedRangeMs || !derivedRange) {
       hideOverlay();
@@ -348,9 +406,15 @@ export function TrendsCard({
       valueHidden
       tooltip={issueTypeLabel ? `Trend for ${issueTypeLabel}` : 'Trend over time'}
       valueSpacerClassName="h-1"
+      className="relative"
     >
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-end gap-2">
+      <div className="absolute right-6 top-6">
+        <Button className="h-7 px-3 text-[11px] font-semibold bg-warning text-warning-foreground hover:bg-warning/90">
+          AI Insights
+        </Button>
+      </div>
+      <div className="flex w-full flex-col gap-1">
+        <div className="flex w-full items-center justify-end gap-2">
           <Select
             value={selectedSource}
             onValueChange={(value) => onSourceChange?.(value as SourceKey)}
@@ -367,7 +431,10 @@ export function TrendsCard({
               ))}
             </SelectContent>
           </Select>
-          <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRangeKey)}>
+          <Select
+            value={syncedRangeKey}
+            onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}
+          >
             <SelectTrigger className="h-7 w-[120px] text-[11px]">
               <SelectValue />
             </SelectTrigger>
@@ -381,7 +448,7 @@ export function TrendsCard({
           </Select>
         </div>
         <div
-          className={["relative h-80 w-full", hasData ? "cursor-crosshair" : ""].join(' ')}
+          className={["relative h-80 w-full min-w-0", hasData ? "cursor-crosshair" : ""].join(' ')}
           ref={chartRef}
           onMouseDown={(event) => {
             if (!chartRef.current || trendData.length === 0) return;
@@ -469,19 +536,19 @@ export function TrendsCard({
         >
           {hasData ? (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
+              <LineChart data={trendData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }} />
                 <YAxis
                   yAxisId="left"
                   tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
-                  width={28}
+                  width={24}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
                   domain={[0, 4]}
                   tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
-                  width={28}
+                  width={24}
                 />
                 <Tooltip content={<TrendsTooltip />} />
                 <Legend />
@@ -523,15 +590,15 @@ export function TrendsCard({
         </div>
         {summary && (
           <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground sm:grid-cols-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <span>Total tickets</span>
               <span className="font-semibold text-foreground">{summary.total}</span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <span>Avg per bucket</span>
               <span className="font-semibold text-foreground">{summary.avgPerBucket.toFixed(1)}</span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <span>Top source</span>
               <span className="font-semibold text-foreground">
                 {summary.topSource
@@ -539,7 +606,7 @@ export function TrendsCard({
                   : '—'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <span>Top issue type</span>
               <span className="font-semibold text-foreground">
                 {summary.topIssueType

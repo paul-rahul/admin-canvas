@@ -29,6 +29,7 @@ const Index = () => {
   const [trendThemeId, setTrendThemeId] = useState<string | null>(null);
   const [isTrendOpen, setIsTrendOpen] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [trendSelectionKey, setTrendSelectionKey] = useState(0);
   const filterTimerRef = useRef<number | null>(null);
   const defaultCustomRange = () => {
     const now = new Date();
@@ -235,13 +236,15 @@ const Index = () => {
                 activeSource={activeSource}
                 activeTime={activeTime}
                 onSourceChange={setActiveSource}
-                onTimeChange={(time) => {
-                  markFiltering();
-                  setActiveTime(time);
-                  if (time === 'custom') {
-                    setCustomRange(defaultCustomRange());
-                  }
-                }}
+            onTimeChange={(time) => {
+              markFiltering();
+              setActiveTime(time);
+              if (time === 'custom') {
+                setCustomRange(defaultCustomRange());
+              } else {
+                setTrendSelectionKey((prev) => prev + 1);
+              }
+            }}
                 customRange={customRange}
                 onCustomRangeChange={(range) => {
                   markFiltering();
@@ -295,6 +298,23 @@ const Index = () => {
                   markFiltering();
                   setActiveSource(source as FeedbackSource);
                 }}
+                timeFilter={activeTime}
+                customRange={customRange}
+                onTimeFilterChange={(rangeKey) => {
+                  markFiltering();
+                  const now = new Date();
+                  if (rangeKey === '1d' || rangeKey === '7d' || rangeKey === '1m') {
+                    const nextTime = rangeKey === '1d' ? '24h' : rangeKey === '7d' ? '7d' : '30d';
+                    setActiveTime(nextTime);
+                    setTrendSelectionKey((prev) => prev + 1);
+                    return;
+                  }
+                  const days =
+                    rangeKey === '3m' ? 90 : rangeKey === '6m' ? 180 : rangeKey === '1y' ? 365 : 7;
+                  setActiveTime('custom');
+                  setCustomRange({ from: new Date(now.getTime() - days * 24 * 60 * 60 * 1000), to: now });
+                }}
+                clearSelectionKey={trendSelectionKey}
                 onTimeRangeSelect={(range) => {
                   markFiltering();
                   setCustomRange(normalizeRange(range));
@@ -304,13 +324,13 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          <div className="space-y-4">
+            <AIInsights feedback={filteredFeedback} />
             <EmergingThemesCard
               themes={emergingThemes}
               onSelectTheme={handleThemeSelect}
               onViewTrend={handleViewTrend}
             />
-            <AIInsights feedback={filteredFeedback} />
           </div>
 
           {/* Feedback Table */}

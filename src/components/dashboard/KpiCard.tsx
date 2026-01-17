@@ -11,6 +11,7 @@ interface KpiCardProps {
   isLoading?: boolean;
   tooltip?: string;
   trendBadge?: string;
+  action?: React.ReactNode;
   className?: string;
   children?: React.ReactNode;
   icon?: LucideIcon;
@@ -25,6 +26,7 @@ export function KpiCard({
   isLoading = false,
   tooltip,
   trendBadge,
+  action,
   className,
   children,
   icon: Icon,
@@ -35,8 +37,8 @@ export function KpiCard({
 
   return (
     <div className={cn("glass rounded-xl p-6 shadow-card min-w-0 h-full flex flex-col", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1 w-full">
+      <div className="flex w-full items-start justify-between gap-3">
+        <div className="space-y-1 w-full min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {Icon && (
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -75,10 +77,15 @@ export function KpiCard({
           {valueHidden && <div className={valueSpacerClassName ?? "h-9"} />}
           {!isLoading && children}
         </div>
-        {trendBadge && !isLoading && (
-          <Badge variant="secondary" className="text-xs">
-            {trendBadge}
-          </Badge>
+        {!isLoading && (action || trendBadge) && (
+          <div className="flex items-center gap-2">
+            {action}
+            {trendBadge && (
+              <Badge variant="secondary" className="text-xs">
+                {trendBadge}
+              </Badge>
+            )}
+          </div>
         )}
       </div>
     </div>

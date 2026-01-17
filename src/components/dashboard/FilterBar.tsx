@@ -60,7 +60,7 @@ export function FilterBar({
     <div className="glass rounded-xl p-4 shadow-card opacity-0 animate-slide-up stagger-1">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground font-medium">Source:</span>
+          <span className="text-xs text-muted-foreground font-medium">Source:</span>
           <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
             {sources.map((source) => (
               <Button
@@ -69,7 +69,7 @@ export function FilterBar({
                 size="sm"
                 onClick={() => onSourceChange(source)}
                 className={cn(
-                  "h-7 px-2 capitalize shrink-0 rounded-full text-[11px]",
+                  "h-7 px-2 capitalize shrink-0 rounded-full text-xs",
                   activeSource === source
                     ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
                     : "bg-muted/30 hover:bg-muted"
@@ -81,26 +81,25 @@ export function FilterBar({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-nowrap">
-          <span className="text-[11px] text-muted-foreground font-medium">Time:</span>
-          <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap overflow-x-auto min-w-0">
-            {times.map((time) => (
-              <Badge
-                key={time}
-                variant="outline"
-                onClick={() => onTimeChange(time)}
-                className={cn(
-                  "cursor-pointer hover:opacity-80 transition-opacity shrink-0 text-[11px] px-2 py-1 h-7",
-                  activeTime === time
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border"
-                )}
-              >
-                {timeLabels[time]}
-              </Badge>
-            ))}
-            {activeTime === 'custom' && (
-              <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground font-medium">Time:</span>
+          <div className="flex flex-wrap items-center gap-1.5 whitespace-nowrap min-w-0 text-xs">
+            {times.filter((time) => !(activeTime === 'custom' && time === 'custom')).map((time) => (
+              <div key={time} className="flex items-center gap-1.5">
+                <Badge
+                  variant="outline"
+                  onClick={() => onTimeChange(time)}
+                  className={cn(
+                    "cursor-pointer hover:opacity-80 transition-opacity shrink-0 text-xs px-2 py-0.5 h-6",
+                    activeTime === time
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border"
+                  )}
+                >
+                  {timeLabels[time]}
+                </Badge>
+                {time === 'all' && activeTime === 'custom' && (
+                  <div className="flex flex-wrap items-center gap-1">
                 <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
                   <Popover>
                     <PopoverTrigger asChild>
@@ -108,7 +107,7 @@ export function FilterBar({
                         variant="outline"
                         size="sm"
                         className={cn(
-                          "h-6 w-[110px] justify-start gap-1.5 border-border/60 bg-transparent px-2 text-[11px]",
+                          "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
                           !customRange.from && "text-muted-foreground"
                         )}
                       >
@@ -137,10 +136,10 @@ export function FilterBar({
                       const next = applyTimeToDate(baseDate, event.target.value);
                       onCustomRangeChange({ from: next, to: customRange.to });
                     }}
-                    className="h-6 w-[52px] border-0 bg-transparent px-1 text-[11px] focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
                 </div>
-                <span className="text-[11px] text-muted-foreground">to</span>
+                <span className="text-xs text-muted-foreground">to</span>
                 <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
                   <Popover>
                     <PopoverTrigger asChild>
@@ -148,7 +147,7 @@ export function FilterBar({
                         variant="outline"
                         size="sm"
                         className={cn(
-                          "h-6 w-[110px] justify-start gap-1.5 border-border/60 bg-transparent px-2 text-[11px]",
+                          "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
                           !customRange.to && "text-muted-foreground"
                         )}
                       >
@@ -177,14 +176,16 @@ export function FilterBar({
                       const next = applyTimeToDate(baseDate, event.target.value);
                       onCustomRangeChange({ from: customRange.from, to: next });
                     }}
-                    className="h-6 w-[52px] border-0 bg-transparent px-1 text-[11px] focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
                 </div>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
           {isFiltering && (
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
               <Loader2 className="h-3 w-3 animate-spin" />
               Applying
             </div>
