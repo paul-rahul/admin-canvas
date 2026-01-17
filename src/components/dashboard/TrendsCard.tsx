@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { format } from 'date-fns';
-import { Activity } from 'lucide-react';
+import { Activity, X } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -79,6 +79,7 @@ interface TrendsCardProps {
   onTimeFilterChange?: (timeRange: TimeRangeKey) => void;
   clearSelectionKey?: number;
   onTimeRangeSelect?: (range: { from: Date; to: Date }) => void;
+  insightsContent?: React.ReactNode;
 }
 
 export function TrendsCard({
@@ -92,8 +93,10 @@ export function TrendsCard({
   onTimeFilterChange,
   clearSelectionKey,
   onTimeRangeSelect,
+  insightsContent,
 }: TrendsCardProps) {
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -268,6 +271,13 @@ export function TrendsCard({
     }
   }, [issueTypeId, timeFilter, customRange]);
 
+  useEffect(() => {
+    if (!isInsightsOpen) return;
+    const handleClose = () => setIsInsightsOpen(false);
+    window.addEventListener('mousedown', handleClose);
+    return () => window.removeEventListener('mousedown', handleClose);
+  }, [isInsightsOpen]);
+
   const hideOverlay = () => {
     if (!overlayRef.current) return;
     overlayRef.current.style.opacity = '0';
@@ -409,7 +419,10 @@ export function TrendsCard({
       className="relative"
     >
       <div className="absolute right-6 top-6">
-        <Button className="h-7 px-3 text-[11px] font-semibold bg-warning text-warning-foreground hover:bg-warning/90">
+        <Button
+          onClick={() => setIsInsightsOpen(true)}
+          className="h-7 px-3 text-[11px] font-semibold bg-warning text-warning-foreground hover:bg-warning/90"
+        >
           AI Insights
         </Button>
       </div>
@@ -448,7 +461,11 @@ export function TrendsCard({
           </Select>
         </div>
         <div
-          className={["relative h-80 w-full min-w-0", hasData ? "cursor-crosshair" : ""].join(' ')}
+          className={[
+            "relative h-80 w-full min-w-0",
+            hasData ? "cursor-crosshair" : "",
+            isInsightsOpen ? "pointer-events-none" : "",
+          ].join(' ')}
           ref={chartRef}
           onMouseDown={(event) => {
             if (!chartRef.current || trendData.length === 0) return;
@@ -588,6 +605,28 @@ export function TrendsCard({
             />
           )}
         </div>
+        {isInsightsOpen && (
+          <div className="absolute inset-0 z-40 pointer-events-auto">
+            <div className="absolute inset-0 bg-background" />
+            <div
+              className="absolute left-6 right-6 bottom-6 top-16 overflow-auto rounded-lg border border-border/60 bg-background/90 p-4"
+            >
+              <button
+                type="button"
+                className="absolute right-5 top-5 z-10 rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                aria-label="Close AI Insights"
+                onClick={() => setIsInsightsOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+              {insightsContent ? (
+                insightsContent
+              ) : (
+                <div className="text-xs text-muted-foreground">No insights available.</div>
+              )}
+            </div>
+          </div>
+        )}
         {summary && (
           <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground sm:grid-cols-2">
             <div className="flex items-center gap-2">

@@ -20,8 +20,19 @@ type InsightPayload = {
 export function AIInsights({ feedback }: AIInsightsProps) {
   const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
 
-  const criticalCount = feedback.filter(f => f.urgency === 'critical' && !f.resolved).length;
-  const featureRequests = feedback.filter(f => f.issueType === 'feature').length;
+  const { criticalCount, featureRequests } = useMemo(() => {
+    let critical = 0;
+    let features = 0;
+    feedback.forEach((item) => {
+      if (item.urgency === 'critical' && !item.resolved) {
+        critical += 1;
+      }
+      if (item.issueType === 'feature') {
+        features += 1;
+      }
+    });
+    return { criticalCount: critical, featureRequests: features };
+  }, [feedback]);
 
   const fallbackInsights = useMemo<Insight[]>(
     () => [

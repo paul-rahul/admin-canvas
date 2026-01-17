@@ -293,6 +293,7 @@ const Index = () => {
                       topIssueType
                     : null
                 }
+                insightsContent={<AIInsights feedback={filteredFeedback} />}
                 sourceValue={activeSource}
                 onSourceChange={(source) => {
                   markFiltering();
@@ -325,7 +326,6 @@ const Index = () => {
           </div>
 
           <div className="space-y-4">
-            <AIInsights feedback={filteredFeedback} />
             <EmergingThemesCard
               themes={emergingThemes}
               onSelectTheme={handleThemeSelect}
