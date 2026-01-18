@@ -1,4 +1,4 @@
-import { Bell, RefreshCw, Brain } from 'lucide-react';
+import { Bell, RefreshCw, Brain, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
@@ -44,7 +44,7 @@ export function Header({
   }, [isOverlayOpen, overlayLock]);
 
   return (
-    <header className="glass sticky top-0 z-50 px-6 py-4 border-b border-border/50">
+    <header className="glass sticky top-0 z-50 px-6 py-2 border-b border-border/50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
@@ -95,7 +95,18 @@ export function Header({
                 ref={overlayRef}
                 className="absolute right-0 top-full mt-2 w-[min(980px,90vw)] z-50"
               >
-                {needsAttentionContent}
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-3 top-3 z-10 h-8 w-8 bg-background/90 text-foreground shadow-sm ring-1 ring-border hover:bg-background"
+                    onClick={() => setIsOverlayOpen(false)}
+                    aria-label="Close Needs Attention overlay"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  {needsAttentionContent}
+                </div>
               </div>
             )}
           </div>

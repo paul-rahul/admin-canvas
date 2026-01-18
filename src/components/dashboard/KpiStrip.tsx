@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { BarChart2, ListChecks, TrendingDown, TrendingUp } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
@@ -17,7 +17,7 @@ interface KpiStripProps {
   extraRightCard?: React.ReactNode;
 }
 
-export function KpiStrip({
+function KpiStripComponent({
   filters,
   entries,
   extraCard,
@@ -429,3 +429,7 @@ export function KpiStrip({
     </div>
   );
 }
+
+export const KpiStrip = memo(KpiStripComponent);
+
+KpiStrip.displayName = 'KpiStrip';

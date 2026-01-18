@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { format } from 'date-fns';
-import { Activity, Info } from 'lucide-react';
+import { Activity, Info, Maximize2 } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { issueTypeConfig, sourceConfig, type FeedbackItem, type FeedbackSource } from '@/data/mockFeedback';
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type TimeRangeKey = '1h' | '7d' | '1m' | '3m' | '6m' | '1y';
 type SourceKey = FeedbackSource | 'all';
@@ -176,7 +178,7 @@ interface TrendsCardProps {
   onTimeRangeSelect?: (range: { from: Date; to: Date }) => void;
 }
 
-export function TrendsCard({
+function TrendsCardComponent({
   entries,
   issueTypeId,
   issueTypeLabel,
@@ -195,6 +197,7 @@ export function TrendsCard({
     avgUrgency: true,
     avgNegative: true,
   });
+  const [isExpanded, setIsExpanded] = useState(false);
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -541,6 +544,234 @@ export function TrendsCard({
     }
   }, [selectedRangeMs, trendData]);
 
+  const renderChart = (heightClass: string, showExpandButton = false) => (
+    <div
+      className={[
+        `relative ${heightClass} w-full min-w-0 select-none`,
+        hasData ? "cursor-crosshair" : "",
+      ].join(' ')}
+      ref={chartRef}
+      onMouseDown={(event) => {
+        if (!chartRef.current || trendData.length === 0) return;
+        window.getSelection?.()?.removeAllRanges();
+        const rect = chartRef.current.getBoundingClientRect();
+        chartRectRef.current = { left: rect.left, width: rect.width };
+        chartWidthRef.current = rect.width;
+        updatePlotRect();
+        const { pixel, plotWidth } = getPlotMetrics(event.clientX);
+        const bucketWidth = plotWidth / trendData.length;
+        const index = getIndexFromPixel(pixel, bucketWidth);
+        isSelectingRef.current = true;
+        dragStartIndexRef.current = index;
+        dragEndIndexRef.current = index;
+        dragPixelStartRef.current = pixel;
+        dragPixelEndRef.current = pixel;
+        updateOverlayPixels(pixel, pixel);
+      }}
+      onMouseMove={(event) => {
+        if (!isSelectingRef.current || !chartRef.current || trendData.length === 0) return;
+        const { pixel, plotWidth } = getPlotMetrics(event.clientX);
+        const bucketWidth = plotWidth / trendData.length;
+        const index = getIndexFromPixel(pixel, bucketWidth);
+        if (dragStartIndexRef.current === null) return;
+        dragEndIndexRef.current = index;
+        dragPixelEndRef.current = pixel;
+        if (rafRef.current) return;
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          if (dragPixelStartRef.current !== null && dragPixelEndRef.current !== null) {
+            updateOverlayPixels(dragPixelStartRef.current, dragPixelEndRef.current);
+          }
+        });
+      }}
+      onMouseUp={() => {
+        if (
+          dragStartIndexRef.current === null ||
+          dragEndIndexRef.current === null ||
+          trendData.length === 0
+        ) {
+          isSelectingRef.current = false;
+          hideOverlay();
+          window.getSelection?.()?.removeAllRanges();
+          return;
+        }
+        if (dragPixelStartRef.current === null || dragPixelEndRef.current === null) {
+          isSelectingRef.current = false;
+          hideOverlay();
+          window.getSelection?.()?.removeAllRanges();
+          return;
+        }
+        const plotWidth = plotRectRef.current?.width ?? chartRef.current?.clientWidth ?? 1;
+        const bucketWidth = plotWidth / trendData.length;
+        const startIndex = getIndexFromPixel(
+          Math.min(dragPixelStartRef.current, dragPixelEndRef.current),
+          bucketWidth
+        );
+        const endIndex = getIndexFromPixel(
+          Math.max(dragPixelStartRef.current, dragPixelEndRef.current),
+          bucketWidth
+        );
+        dragStartIndexRef.current = null;
+        dragEndIndexRef.current = null;
+        dragPixelStartRef.current = null;
+        dragPixelEndRef.current = null;
+        isSelectingRef.current = false;
+        const startPoint = trendData[startIndex];
+        const endPoint = trendData[endIndex];
+        if (startPoint && endPoint) {
+          setSelectedRangeMs({ from: startPoint.startMs, to: endPoint.endMs - 1 });
+        }
+        if (startPoint && endPoint && onTimeRangeSelect) {
+          onTimeRangeSelect({
+            from: new Date(startPoint.startMs),
+            to: new Date(endPoint.endMs - 1),
+          });
+        }
+        setSelectedRangeMs(null);
+        hideOverlay();
+        window.getSelection?.()?.removeAllRanges();
+      }}
+      onMouseLeave={() => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+        dragStartIndexRef.current = null;
+        dragEndIndexRef.current = null;
+        dragPixelStartRef.current = null;
+        dragPixelEndRef.current = null;
+        hideOverlay();
+        window.getSelection?.()?.removeAllRanges();
+      }}
+    >
+      {showExpandButton && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="absolute right-10 top-2 z-40 h-7 px-2 text-[11px] shadow-sm"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={() => setIsExpanded(true)}
+        >
+          <Maximize2 className="mr-1 h-3.5 w-3.5" />
+          Expand
+        </Button>
+      )}
+      {hasData ? (
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={trendData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="transparent" />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }} />
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
+              width={24}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              domain={[0, 4]}
+              tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
+              width={24}
+            />
+            <Tooltip content={<TrendsTooltip />} />
+            {seriesVisibility.tickets && (
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="count"
+                name="Total Tickets"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+                isAnimationActive={false}
+              />
+            )}
+            {seriesVisibility.avgUrgency && (
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="avgUrgency"
+                name="Avg Urgency"
+                stroke="hsl(199 89% 48%)"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
+            {seriesVisibility.avgNegative && (
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="avgNegative"
+                name="Avg Negative"
+                stroke="hsl(var(--destructive))"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 text-xs text-muted-foreground">
+          No trend data available.
+        </div>
+      )}
+      {hasData && (
+        <div
+          ref={overlayRef}
+          className="absolute z-20 rounded-md border border-primary/50 pointer-events-none"
+          style={{
+            left: 0,
+            width: 0,
+            opacity: 0,
+            top: 0,
+            height: 0,
+            backgroundColor: 'hsl(var(--primary) / 0.2)',
+          }}
+        />
+      )}
+    </div>
+  );
+
+  const renderFilters = () => (
+    <div className="flex w-full items-center justify-between gap-3">
+      <p className="min-w-0 flex-1 text-sm font-bold text-foreground">
+        Drag on the chart to select a time range.
+      </p>
+      <div className="flex shrink-0 items-center gap-2">
+        <Select value={selectedSource} onValueChange={(value) => onSourceChange?.(value as SourceKey)}>
+          <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            {Object.entries(sourceConfig).map(([key, config]) => (
+              <SelectItem key={key} value={key}>
+                {config.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={displayRangeKey} onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}>
+          <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(timeRanges).map(([key, range]) => (
+              <SelectItem key={key} value={key}>
+                {range.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+
   return (
     <KpiCard
       title="Trends"
@@ -551,227 +782,29 @@ export function TrendsCard({
       className="relative"
     >
       <div className="flex w-full flex-col gap-1">
-        <div className="flex w-full items-center justify-between gap-3">
-          <p className="min-w-0 flex-1 text-sm font-bold text-foreground">
-            Drag on the chart to select a time range.
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Select
-              value={selectedSource}
-              onValueChange={(value) => onSourceChange?.(value as SourceKey)}
-            >
-              <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All sources</SelectItem>
-              {Object.entries(sourceConfig).map(([key, config]) => (
-                <SelectItem key={key} value={key}>
-                  {config.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-            <Select
-              value={displayRangeKey}
-              onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}
-            >
-              <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(timeRanges).map(([key, range]) => (
-                  <SelectItem key={key} value={key}>
-                    {range.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div
-          className={[
-            "relative h-96 w-full min-w-0 select-none",
-            hasData ? "cursor-crosshair" : "",
-          ].join(' ')}
-          ref={chartRef}
-          onMouseDown={(event) => {
-            if (!chartRef.current || trendData.length === 0) return;
-            window.getSelection?.()?.removeAllRanges();
-            const rect = chartRef.current.getBoundingClientRect();
-            chartRectRef.current = { left: rect.left, width: rect.width };
-            chartWidthRef.current = rect.width;
-            updatePlotRect();
-            const { pixel, plotWidth } = getPlotMetrics(event.clientX);
-            const bucketWidth = plotWidth / trendData.length;
-            const index = getIndexFromPixel(pixel, bucketWidth);
-            isSelectingRef.current = true;
-            dragStartIndexRef.current = index;
-            dragEndIndexRef.current = index;
-            dragPixelStartRef.current = pixel;
-            dragPixelEndRef.current = pixel;
-            updateOverlayPixels(pixel, pixel);
-          }}
-          onMouseMove={(event) => {
-            if (!isSelectingRef.current || !chartRef.current || trendData.length === 0) return;
-            const { pixel, plotWidth } = getPlotMetrics(event.clientX);
-            const bucketWidth = plotWidth / trendData.length;
-            const index = getIndexFromPixel(pixel, bucketWidth);
-            if (dragStartIndexRef.current === null) return;
-            dragEndIndexRef.current = index;
-            dragPixelEndRef.current = pixel;
-            if (rafRef.current) return;
-            rafRef.current = requestAnimationFrame(() => {
-              rafRef.current = null;
-              if (dragPixelStartRef.current !== null && dragPixelEndRef.current !== null) {
-                updateOverlayPixels(dragPixelStartRef.current, dragPixelEndRef.current);
-              }
-            });
-          }}
-          onMouseUp={() => {
-            if (
-              dragStartIndexRef.current === null ||
-              dragEndIndexRef.current === null ||
-              trendData.length === 0
-            ) {
-              isSelectingRef.current = false;
-              hideOverlay();
-              window.getSelection?.()?.removeAllRanges();
-              return;
-            }
-            if (dragPixelStartRef.current === null || dragPixelEndRef.current === null) {
-              isSelectingRef.current = false;
-              hideOverlay();
-              window.getSelection?.()?.removeAllRanges();
-              return;
-            }
-            const plotWidth = plotRectRef.current?.width ?? chartRef.current?.clientWidth ?? 1;
-            const bucketWidth = plotWidth / trendData.length;
-            const startIndex = getIndexFromPixel(
-              Math.min(dragPixelStartRef.current, dragPixelEndRef.current),
-              bucketWidth
-            );
-            const endIndex = getIndexFromPixel(
-              Math.max(dragPixelStartRef.current, dragPixelEndRef.current),
-              bucketWidth
-            );
-            dragStartIndexRef.current = null;
-            dragEndIndexRef.current = null;
-            dragPixelStartRef.current = null;
-            dragPixelEndRef.current = null;
-            isSelectingRef.current = false;
-            const startPoint = trendData[startIndex];
-            const endPoint = trendData[endIndex];
-            if (startPoint && endPoint) {
-              setSelectedRangeMs({ from: startPoint.startMs, to: endPoint.endMs - 1 });
-            }
-            if (startPoint && endPoint && onTimeRangeSelect) {
-              onTimeRangeSelect({
-                from: new Date(startPoint.startMs),
-                to: new Date(endPoint.endMs - 1),
-              });
-            }
-            setSelectedRangeMs(null);
-            hideOverlay();
-            window.getSelection?.()?.removeAllRanges();
-          }}
-          onMouseLeave={() => {
-            if (!isSelectingRef.current) return;
-            isSelectingRef.current = false;
-            dragStartIndexRef.current = null;
-            dragEndIndexRef.current = null;
-            dragPixelStartRef.current = null;
-            dragPixelEndRef.current = null;
-            hideOverlay();
-            window.getSelection?.()?.removeAllRanges();
-          }}
-        >
-          {hasData ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="transparent" />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }} />
-                <YAxis
-                  yAxisId="left"
-                  tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
-                  width={24}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  domain={[0, 4]}
-                  tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
-                  width={24}
-                />
-                <Tooltip content={<TrendsTooltip />} />
-              {seriesVisibility.tickets && (
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="count"
-                  name="Total Tickets"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                  isAnimationActive={false}
-                />
-              )}
-              {seriesVisibility.avgUrgency && (
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="avgUrgency"
-                  name="Avg Urgency"
-                  stroke="hsl(199 89% 48%)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              )}
-              {seriesVisibility.avgNegative && (
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="avgNegative"
-                  name="Avg Negative"
-                  stroke="hsl(var(--destructive))"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 text-xs text-muted-foreground">
-              No trend data available.
-            </div>
-          )}
-          {hasData && (
-            <div
-              ref={overlayRef}
-              className="absolute z-20 rounded-md border border-primary/50 pointer-events-none"
-              style={{
-                left: 0,
-                width: 0,
-                opacity: 0,
-                top: 0,
-                height: 0,
-                backgroundColor: 'hsl(var(--primary) / 0.2)',
-              }}
-            />
-          )}
-        </div>
+        {renderFilters()}
+        {!isExpanded && renderChart("h-96", true)}
         <div className="mt-2">
           <TrendsLegend visibility={seriesVisibility} onToggle={toggleSeries} />
         </div>
         <div className="mt-2 text-sm font-semibold text-foreground text-center">{topSourceTheme}</div>
       </div>
+      <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Trends</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {renderFilters()}
+            {renderChart("h-[70vh]")}
+            <TrendsLegend visibility={seriesVisibility} onToggle={toggleSeries} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </KpiCard>
   );
 }
+
+export const TrendsCard = memo(TrendsCardComponent);
+
+TrendsCard.displayName = 'TrendsCard';

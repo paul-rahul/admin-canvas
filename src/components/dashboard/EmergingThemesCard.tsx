@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { memo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -10,7 +11,7 @@ interface EmergingThemesCardProps {
   isLoading?: boolean;
 }
 
-export function EmergingThemesCard({
+function EmergingThemesCardComponent({
   themes,
   isLoading = false,
 }: EmergingThemesCardProps) {
@@ -86,3 +87,7 @@ export function EmergingThemesCard({
     </div>
   );
 }
+
+export const EmergingThemesCard = memo(EmergingThemesCardComponent);
+
+EmergingThemesCard.displayName = 'EmergingThemesCard';

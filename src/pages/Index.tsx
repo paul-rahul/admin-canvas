@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '@/components/dashboard/Header';
 import { FilterBar } from '@/components/dashboard/FilterBar';
 import { FeedbackTable } from '@/components/dashboard/FeedbackTable';
@@ -9,7 +9,6 @@ import { KpiCard } from '@/components/dashboard/KpiCard';
 import { IssueTrendModal } from '@/components/dashboard/IssueTrendModal';
 import { TrendsCard } from '@/components/dashboard/TrendsCard';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
-import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 import { formatPercent } from '@/lib/kpiUtils';
 import { AlertTriangle, TrendingDown, TrendingUp, Info } from 'lucide-react';
@@ -35,19 +34,19 @@ const Index = () => {
   const [trendSelectionKey, setTrendSelectionKey] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const filterTimerRef = useRef<number | null>(null);
-  const defaultCustomRange = () => {
+  const defaultCustomRange = useCallback(() => {
     const now = new Date();
     return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), to: now };
-  };
+  }, []);
 
-  const normalizeRange = (range: { from: Date | null; to: Date | null }) => {
+  const normalizeRange = useCallback((range: { from: Date | null; to: Date | null }) => {
     if (range.from && range.to && range.from > range.to) {
       return { from: range.to, to: range.from };
     }
     return range;
-  };
+  }, []);
 
-  const markFiltering = () => {
+  const markFiltering = useCallback(() => {
     if (filterTimerRef.current) {
       window.clearTimeout(filterTimerRef.current);
     }
@@ -56,7 +55,7 @@ const Index = () => {
       setIsFiltering(false);
       filterTimerRef.current = null;
     }, 250);
-  };
+  }, []);
 
   const indexedFeedback = useMemo(
     () =>
@@ -264,26 +263,16 @@ const Index = () => {
     return entryAlerts;
   }, [needsAttentionEntries, needsAttentionWindow.windowEnd, needsAttentionWindow.windowStart]);
 
-  const getOwnerLabel = (themeId: string) => {
+  const getOwnerLabel = useCallback((themeId: string) => {
     if (themeId === 'performance' || themeId === 'bug') return 'Engineering';
     if (themeId === 'ux' || themeId === 'feature' || themeId === 'documentation') return 'Product';
     if (themeId === 'pricing') return 'Support';
     return 'Support';
-  };
-
-  const handleThemeSelect = (themeId: string) => {
-    const params = new URLSearchParams(window.location.search);
-    params.set('theme_id', themeId);
-    window.location.assign(`/themes?${params.toString()}`);
-  };
-
-  const handleViewTrend = (themeId: string) => {
-    setTrendThemeId(themeId);
-    setIsTrendOpen(true);
-  };
+  }, []);
 
 
-  const loadFeedback = async () => {
+
+  const loadFeedback = useCallback(async () => {
     try {
       const response = await fetch('/api/feedback');
       if (!response.ok) {
@@ -301,7 +290,7 @@ const Index = () => {
     } catch (error) {
       setFeedback(mockFeedback);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadFeedback();
@@ -315,17 +304,252 @@ const Index = () => {
     };
   }, []);
 
-  const handleRefresh = () => {
+  const handleTimeChange = useCallback(
+    (time: '24h' | '7d' | '30d' | 'all' | 'custom') => {
+      markFiltering();
+      setActiveTime(time);
+      if (time === 'custom') {
+        setCustomRange(defaultCustomRange());
+      } else {
+        setTrendSelectionKey((prev) => prev + 1);
+      }
+    },
+    [defaultCustomRange, markFiltering]
+  );
+
+  const handleCustomRangeChange = useCallback(
+    (range: { from: Date | null; to: Date | null }) => {
+      markFiltering();
+      setCustomRange(normalizeRange(range));
+      setActiveTime('custom');
+    },
+    [markFiltering, normalizeRange]
+  );
+
+  const handleKpiSourceSelect = useCallback((source: string) => {
+    setActiveSource(source as FeedbackSource);
+  }, []);
+
+  const handleTrendSourceChange = useCallback(
+    (source: FeedbackSource | 'all') => {
+      markFiltering();
+      setActiveSource(source as FeedbackSource);
+    },
+    [markFiltering]
+  );
+
+  const handleTrendTimeFilterChange = useCallback(
+    (rangeKey: '1h' | '7d' | '1m' | '3m' | '6m' | '1y') => {
+      markFiltering();
+      const now = new Date();
+      if (rangeKey === '1h' || rangeKey === '7d' || rangeKey === '1m') {
+        const nextTime = rangeKey === '1h' ? '24h' : rangeKey === '7d' ? '7d' : '30d';
+        setActiveTime(nextTime);
+        setTrendSelectionKey((prev) => prev + 1);
+        return;
+      }
+      const days = rangeKey === '3m' ? 90 : rangeKey === '6m' ? 180 : 365;
+      setActiveTime('custom');
+      setCustomRange({ from: new Date(now.getTime() - days * 24 * 60 * 60 * 1000), to: now });
+    },
+    [markFiltering]
+  );
+
+  const handleTrendRangeSelect = useCallback(
+    (range: { from: Date; to: Date }) => {
+      markFiltering();
+      setCustomRange(normalizeRange(range));
+      setActiveTime('custom');
+    },
+    [markFiltering, normalizeRange]
+  );
+
+  const handleRefresh = useCallback(() => {
     void loadFeedback();
     setLastUpdatedAt(new Date());
-  };
+  }, [loadFeedback]);
 
-  const handleResolve = (id: string) => {
+  const handleResolve = useCallback((id: string) => {
     setFeedback((prev) =>
       prev.map((item) => (item.id === id ? { ...item, resolved: true } : item))
     );
     setSelectedItem(null);
-  };
+  }, []);
+
+  const needsAttentionContent = useMemo(
+    () => (
+      <section className="space-y-3 rounded-xl border border-border/60 bg-background p-4 shadow-card">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Needs Attention Now</h3>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <AIInsights feedback={needsAttentionEntries} compact />
+          <div className="rounded-xl border border-border/60 p-4 md:col-start-1 md:row-start-2">
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-foreground">Emerging Issues</h4>
+              <p className="text-xs text-muted-foreground">Last 7 days only.</p>
+            </div>
+            {needsAttentionEmerging.length ? (
+              <div className="grid gap-3 max-h-[360px] overflow-y-auto pr-1 md:grid-cols-2">
+                {needsAttentionEmerging.slice(0, 4).map((theme) => {
+                  const mentionDeltaPercent =
+                    theme.prevCount > 0
+                      ? ((theme.currentCount - theme.prevCount) / theme.prevCount) * 100
+                      : 100;
+                  const mentionTrendIcon =
+                    mentionDeltaPercent >= 0 ? (
+                      <TrendingUp className="h-3.5 w-3.5 text-success" />
+                    ) : (
+                      <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+                    );
+                  const urgencyDelta =
+                    (theme.currentAvgUrgency ?? 0) - (theme.prevAvgUrgency ?? 0);
+                  const urgencyTrendIcon =
+                    urgencyDelta >= 0 ? (
+                      <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+                    ) : (
+                      <TrendingDown className="h-3.5 w-3.5 text-success" />
+                    );
+                  const negativeDelta =
+                    (theme.currentNegativeRatio ?? 0) - (theme.prevNegativeRatio ?? 0);
+                  const negativeTrendIcon =
+                    negativeDelta >= 0 ? (
+                      <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+                    ) : (
+                      <TrendingDown className="h-3.5 w-3.5 text-success" />
+                    );
+                  return (
+                    <div
+                      key={theme.theme_id}
+                      className="flex flex-col gap-2 rounded-lg border border-border/60 p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {theme.name}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                        {mentionTrendIcon}
+                        Mentions: {Math.abs(mentionDeltaPercent).toFixed(0)}%{' '}
+                        {mentionDeltaPercent >= 0 ? 'increase' : 'decrease'}
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                        {urgencyTrendIcon}
+                        Δ urgency: {theme.prevAvgUrgency?.toFixed(2) ?? '—'} →{' '}
+                        {theme.currentAvgUrgency?.toFixed(2) ?? '—'}
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                        {negativeTrendIcon}
+                        % Negative: {((theme.prevNegativeRatio ?? 0) * 100).toFixed(0)} →{' '}
+                        {((theme.currentNegativeRatio ?? 0) * 100).toFixed(0)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
+                No emerging issues in the current window.
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl border border-border/60 p-4 md:col-start-2 md:row-start-1">
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-foreground">Active Alerts</h4>
+              <p className="text-xs text-muted-foreground">
+                Unresolved critical issues from the last 7 days.
+              </p>
+            </div>
+            {alerts.length ? (
+              <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                {alerts.map((alert) => {
+                  const severityClass =
+                    alert.severity === 'Critical'
+                      ? 'bg-destructive/20 text-destructive'
+                      : 'bg-warning/20 text-warning';
+                  const ownerLabel =
+                    alert.type === 'theme'
+                      ? getOwnerLabel(alert.id)
+                      : getOwnerLabel(alert.entry.issueType ?? '');
+                  const onClick = () => {
+                    if (alert.type === 'theme') {
+                      const themeLabel =
+                        issueTypeConfig[alert.id as keyof typeof issueTypeConfig]?.label ??
+                        alert.id;
+                      setSearchQuery(themeLabel);
+                    } else {
+                      setSearchQuery(alert.title);
+                      setSelectedItem(alert.entry);
+                    }
+                  };
+                  return (
+                    <TooltipProvider key={`${alert.type}-${alert.id}`}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={onClick}
+                            className="w-full rounded-lg border border-border/60 p-3 text-left transition hover:bg-muted/20"
+                          >
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                              <div className="min-w-0 space-y-1">
+                                <p className="text-sm font-semibold text-foreground truncate">
+                                  {alert.title}
+                                </p>
+                                <div className="text-xs text-muted-foreground">
+                                  Owner:{' '}
+                                  <span className="font-semibold text-foreground">{ownerLabel}</span>
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  Open since{' '}
+                                  <span className="font-semibold text-foreground">
+                                    {formatDistanceToNow(alert.entry.timestamp, {
+                                      addSuffix: false,
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <Badge className={`text-[10px] ${severityClass}`}>
+                                  {alert.severity}
+                                </Badge>
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-[10px] text-primary-foreground ${
+                                    issueTypeConfig[
+                                      alert.entry.issueType as keyof typeof issueTypeConfig
+                                    ]?.color ?? ''
+                                  }`}
+                                >
+                                  {issueTypeConfig[
+                                    alert.entry.issueType as keyof typeof issueTypeConfig
+                                  ]?.label ?? alert.entry.issueType}
+                                </Badge>
+                              </div>
+                            </div>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {alert.reason} compared to the previous period.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
+                No alerts triggered in the current window.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    ),
+    [alerts, getOwnerLabel, needsAttentionEmerging, needsAttentionEntries]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -341,198 +565,20 @@ const Index = () => {
           overlayLock={Boolean(selectedItem) || isTrendOpen}
           lastUpdatedAt={lastUpdatedAt}
           alertCount={alerts.length}
-          needsAttentionContent={
-            <section className="space-y-3 rounded-xl border border-border/60 bg-background p-4 shadow-card">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Needs Attention Now</h3>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <AIInsights feedback={needsAttentionEntries} compact />
-                <div className="rounded-xl border border-border/60 p-4 md:col-start-1 md:row-start-2">
-                  <div className="mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">Emerging Issues</h4>
-                    <p className="text-xs text-muted-foreground">Last 7 days only.</p>
-                  </div>
-                  {needsAttentionEmerging.length ? (
-                    <div className="grid gap-3 max-h-[360px] overflow-y-auto pr-1 md:grid-cols-2">
-                      {needsAttentionEmerging.slice(0, 4).map((theme) => {
-                        const mentionDeltaPercent =
-                          theme.prevCount > 0
-                            ? ((theme.currentCount - theme.prevCount) / theme.prevCount) * 100
-                            : 100;
-                        const mentionTrendIcon =
-                          mentionDeltaPercent >= 0 ? (
-                            <TrendingUp className="h-3.5 w-3.5 text-success" />
-                          ) : (
-                            <TrendingDown className="h-3.5 w-3.5 text-destructive" />
-                          );
-                        const urgencyDelta =
-                          (theme.currentAvgUrgency ?? 0) - (theme.prevAvgUrgency ?? 0);
-                        const urgencyTrendIcon =
-                          urgencyDelta >= 0 ? (
-                            <TrendingUp className="h-3.5 w-3.5 text-destructive" />
-                          ) : (
-                            <TrendingDown className="h-3.5 w-3.5 text-success" />
-                          );
-                        const negativeDelta =
-                          (theme.currentNegativeRatio ?? 0) - (theme.prevNegativeRatio ?? 0);
-                        const negativeTrendIcon =
-                          negativeDelta >= 0 ? (
-                            <TrendingUp className="h-3.5 w-3.5 text-destructive" />
-                          ) : (
-                            <TrendingDown className="h-3.5 w-3.5 text-success" />
-                          );
-                        return (
-                        <div
-                          key={theme.theme_id}
-                          className="flex flex-col gap-2 rounded-lg border border-border/60 p-3"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-foreground truncate">
-                                {theme.name}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                            {mentionTrendIcon}
-                            Mentions: {Math.abs(mentionDeltaPercent).toFixed(0)}%{' '}
-                            {mentionDeltaPercent >= 0 ? 'increase' : 'decrease'}
-                          </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                            {urgencyTrendIcon}
-                            Δ urgency: {theme.prevAvgUrgency?.toFixed(2) ?? '—'} →{' '}
-                            {theme.currentAvgUrgency?.toFixed(2) ?? '—'}
-                          </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                            {negativeTrendIcon}
-                            % Negative: {((theme.prevNegativeRatio ?? 0) * 100).toFixed(0)} →{' '}
-                            {((theme.currentNegativeRatio ?? 0) * 100).toFixed(0)}
-                          </div>
-                        </div>
-                      );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
-                      No emerging issues in the current window.
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-border/60 p-4 md:col-start-2 md:row-start-1">
-                  <div className="mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">Active Alerts</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Unresolved critical issues from the last 7 days.
-                    </p>
-                  </div>
-                  {alerts.length ? (
-                    <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-                      {alerts.map((alert) => {
-                        const severityClass =
-                          alert.severity === 'Critical'
-                            ? 'bg-destructive/20 text-destructive'
-                            : 'bg-warning/20 text-warning';
-                        const ownerLabel =
-                          alert.type === 'theme'
-                            ? getOwnerLabel(alert.id)
-                            : getOwnerLabel(alert.entry.issueType ?? '');
-                        const onClick = () => {
-                          if (alert.type === 'theme') {
-                            const themeLabel =
-                              issueTypeConfig[alert.id as keyof typeof issueTypeConfig]?.label ??
-                              alert.id;
-                            setSearchQuery(themeLabel);
-                          } else {
-                            setSearchQuery(alert.title);
-                            setSelectedItem(alert.entry);
-                          }
-                        };
-                        return (
-                          <TooltipProvider key={`${alert.type}-${alert.id}`}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  onClick={onClick}
-                                  className="w-full rounded-lg border border-border/60 p-3 text-left transition hover:bg-muted/20"
-                                >
-                                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                                    <div className="min-w-0 space-y-1">
-                                      <p className="text-sm font-semibold text-foreground truncate">
-                                        {alert.title}
-                                      </p>
-                                      <div className="text-xs text-muted-foreground">
-                                        Owner:{' '}
-                                        <span className="font-semibold text-foreground">{ownerLabel}</span>
-                                      </div>
-                                      <div className="text-[11px] text-muted-foreground">
-                                        Open since{' '}
-                                        <span className="font-semibold text-foreground">
-                                          {formatDistanceToNow(alert.entry.timestamp, { addSuffix: false })}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                      <Badge className={`text-[10px] ${severityClass}`}>
-                                        {alert.severity}
-                                      </Badge>
-                                      <Badge
-                                        variant="secondary"
-                                        className={`text-[10px] text-primary-foreground ${
-                                          issueTypeConfig[alert.entry.issueType as keyof typeof issueTypeConfig]
-                                            ?.color ?? ''
-                                        }`}
-                                      >
-                                        {issueTypeConfig[alert.entry.issueType as keyof typeof issueTypeConfig]
-                                          ?.label ?? alert.entry.issueType}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                {alert.reason} compared to the previous period.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
-                      No alerts triggered in the current window.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-          }
+          needsAttentionContent={needsAttentionContent}
         />
 
-        <main className="container mx-auto px-6 py-8 space-y-6">
+        <main className="container mx-auto px-6 pt-3 pb-0 space-y-6">
           <div className="grid gap-6 grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Filters */}
               <FilterBar
                 activeSource={activeSource}
                 activeTime={activeTime}
                 onSourceChange={setActiveSource}
-            onTimeChange={(time) => {
-              markFiltering();
-              setActiveTime(time);
-              if (time === 'custom') {
-                setCustomRange(defaultCustomRange());
-              } else {
-                setTrendSelectionKey((prev) => prev + 1);
-              }
-            }}
+                onTimeChange={handleTimeChange}
                 customRange={customRange}
-                onCustomRangeChange={(range) => {
-                  markFiltering();
-                  setCustomRange(normalizeRange(range));
-                  setActiveTime('custom');
-                }}
+                onCustomRangeChange={handleCustomRangeChange}
                 isFiltering={isFiltering}
               />
 
@@ -541,9 +587,7 @@ const Index = () => {
                 filters={kpiFilters}
                 entries={baseFilteredItems}
                 prefilteredEntries={filteredFeedback}
-                onSourceSelect={(source) => {
-                  setActiveSource(source as FeedbackSource);
-                }}
+                onSourceSelect={handleKpiSourceSelect}
                 extraCard={(issueTypesCard) => (
                   <div className="grid h-full grid-rows-[1fr_auto] gap-4">
                 <KpiCard
@@ -617,45 +661,22 @@ const Index = () => {
                     : null
                 }
                 sourceValue={activeSource}
-                onSourceChange={(source) => {
-                  markFiltering();
-                  setActiveSource(source as FeedbackSource);
-                }}
+                onSourceChange={handleTrendSourceChange}
                 timeFilter={activeTime}
                 customRange={customRange}
-                onTimeFilterChange={(rangeKey) => {
-                  markFiltering();
-                  const now = new Date();
-                  if (rangeKey === '1h' || rangeKey === '7d' || rangeKey === '1m') {
-                    const nextTime =
-                      rangeKey === '1h'
-                        ? '24h'
-                        : rangeKey === '7d'
-                        ? '7d'
-                        : '30d';
-                    setActiveTime(nextTime);
-                    setTrendSelectionKey((prev) => prev + 1);
-                    return;
-                  }
-                  const days =
-                    rangeKey === '3m' ? 90 : rangeKey === '6m' ? 180 : rangeKey === '1y' ? 365 : 7;
-                  setActiveTime('custom');
-                  setCustomRange({ from: new Date(now.getTime() - days * 24 * 60 * 60 * 1000), to: now });
-                }}
+                onTimeFilterChange={handleTrendTimeFilterChange}
                 clearSelectionKey={trendSelectionKey}
-                onTimeRangeSelect={(range) => {
-                  markFiltering();
-                  setCustomRange(normalizeRange(range));
-                  setActiveTime('custom');
-                }}
+                onTimeRangeSelect={handleTrendRangeSelect}
               />
             </div>
           </div>
 
-          <div className="space-y-4"></div>
+          <div className="space-y-0"></div>
 
           {/* Feedback Table */}
-          <FeedbackTable feedback={filteredFeedback} onSelect={setSelectedItem} />
+          <div className="-mt-10">
+            <FeedbackTable feedback={filteredFeedback} onSelect={setSelectedItem} />
+          </div>
         </main>
       </div>
 
@@ -676,11 +697,7 @@ const Index = () => {
             ? issueTypeConfig[trendThemeId as keyof typeof issueTypeConfig]?.label ?? trendThemeId
             : null
         }
-        onTimeRangeSelect={(range) => {
-          markFiltering();
-          setCustomRange(normalizeRange(range));
-          setActiveTime('custom');
-        }}
+        onTimeRangeSelect={handleTrendRangeSelect}
       />
     </div>
   );

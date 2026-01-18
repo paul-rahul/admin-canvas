@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Sparkles, TrendingUp, AlertTriangle, Lightbulb } from 'lucide-react';
 import { FeedbackItem } from '@/data/mockFeedback';
 
@@ -18,7 +18,7 @@ type InsightPayload = {
   summary?: string;
 };
 
-export function AIInsights({ feedback, compact = false }: AIInsightsProps) {
+function AIInsightsComponent({ feedback, compact = false }: AIInsightsProps) {
   const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
 
   const { criticalCount, featureRequests } = useMemo(() => {
@@ -177,3 +177,7 @@ export function AIInsights({ feedback, compact = false }: AIInsightsProps) {
     </div>
   );
 }
+
+export const AIInsights = memo(AIInsightsComponent);
+
+AIInsights.displayName = 'AIInsights';

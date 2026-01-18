@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button as UiButton } from '@/components/ui/button';
@@ -37,7 +38,7 @@ const applyTimeToDate = (date: Date | null, timeValue: string) => {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute);
 };
 
-export function FilterBar({
+function FilterBarComponent({
   activeSource,
   activeTime,
   onSourceChange,
@@ -195,3 +196,7 @@ export function FilterBar({
     </div>
   );
 }
+
+export const FilterBar = memo(FilterBarComponent);
+
+FilterBar.displayName = 'FilterBar';
