@@ -5,15 +5,17 @@ import { FeedbackTable } from '@/components/dashboard/FeedbackTable';
 import { AIInsights } from '@/components/dashboard/AIInsights';
 import { FeedbackDetail } from '@/components/dashboard/FeedbackDetail';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
-import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { IssueTrendModal } from '@/components/dashboard/IssueTrendModal';
 import { TrendsCard } from '@/components/dashboard/TrendsCard';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
+import { EmergingThemesCard } from '@/components/dashboard/EmergingThemesCard';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 import { formatPercent } from '@/lib/kpiUtils';
 import { AlertTriangle, TrendingDown, TrendingUp, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+import { formatDistanceToNow } from 'date-fns';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -31,6 +33,7 @@ const Index = () => {
   const [isTrendOpen, setIsTrendOpen] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
   const [trendSelectionKey, setTrendSelectionKey] = useState(0);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const filterTimerRef = useRef<number | null>(null);
   const defaultCustomRange = () => {
     const now = new Date();
@@ -60,10 +63,40 @@ const Index = () => {
       feedback.map((item) => ({
         item,
         timestampMs: item.timestamp?.getTime?.() ?? null,
-        searchText: `${item.title} ${item.content} ${item.author}`.toLowerCase(),
+        searchText: `${item.title} ${item.content} ${item.author} ${item.issueType} ${
+          issueTypeConfig[item.issueType]?.label ?? ''
+        }`.toLowerCase(),
       })),
     [feedback]
   );
+
+  const needsAttentionWindow = useMemo(() => {
+    const now = Date.now();
+    const windowStart = now - 7 * 24 * 60 * 60 * 1000;
+    const previousStart = windowStart - 7 * 24 * 60 * 60 * 1000;
+    return { windowStart, windowEnd: now, previousStart };
+  }, []);
+
+  const needsAttentionEntries = useMemo(() => {
+    return indexedFeedback
+      .filter(({ timestampMs }) => timestampMs !== null && timestampMs >= needsAttentionWindow.windowStart)
+      .map(({ item }) => item);
+  }, [indexedFeedback, needsAttentionWindow.windowStart]);
+
+  const needsAttentionEmerging = useMemo(() => {
+    const themes = Object.entries(issueTypeConfig).map(([theme_id, config]) => ({
+      theme_id,
+      name: config.label,
+    }));
+    const endDate = new Date(needsAttentionWindow.windowEnd);
+    const compareEntries = indexedFeedback
+      .filter(
+        ({ timestampMs }) =>
+          timestampMs !== null && timestampMs >= needsAttentionWindow.previousStart
+      )
+      .map(({ item }) => item);
+    return computeEmergingThemes(compareEntries, themes, endDate, 7, 4);
+  }, [indexedFeedback, needsAttentionWindow.previousStart, needsAttentionWindow.windowEnd]);
 
   const baseFiltered = useMemo(() => {
     return indexedFeedback.filter(({ item, searchText }) => {
@@ -121,27 +154,10 @@ const Index = () => {
     [activeSource, activeTime, searchNeedle, customRange]
   );
 
-  const feedbackForEmerging = useMemo(
+  const baseFilteredItems = useMemo(
     () => baseFiltered.map(({ item }) => item),
     [baseFiltered]
   );
-
-  const emergingThemes = useMemo(() => {
-    const themes = Object.entries(issueTypeConfig).map(([theme_id, config]) => ({
-      theme_id,
-      name: config.label,
-    }));
-    const dayMs = 24 * 60 * 60 * 1000;
-    const customDays =
-      activeTime === 'custom' && customRange.from && customRange.to
-        ? Math.max(1, Math.round((customRange.to.getTime() - customRange.from.getTime()) / dayMs))
-        : null;
-    const windowDays =
-      customDays ??
-      (activeTime === '24h' ? 1 : activeTime === '7d' ? 7 : activeTime === '30d' ? 30 : 30);
-    const endDate = activeTime === 'custom' && customRange.to ? customRange.to : new Date();
-    return computeEmergingThemes(feedbackForEmerging, themes, endDate, windowDays, 3);
-  }, [feedbackForEmerging, activeTime, customRange]);
 
   const { criticalPercent, criticalCount, criticalHighCount, criticalDelta } = useMemo(() => {
     const total = filteredFeedback.length;
@@ -211,6 +227,50 @@ const Index = () => {
     return entries[0]?.[0] ?? null;
   }, [filteredFeedback]);
 
+
+  const alerts = useMemo(() => {
+    const urgencyRank = (urgency: string) => (urgency === 'critical' ? 2 : urgency === 'high' ? 1 : 0);
+    const entryAlerts = needsAttentionEntries
+      .filter((entry) => {
+        if (entry.resolved) return false;
+        if (entry.urgency !== 'critical' && entry.urgency !== 'high') return false;
+        const timestampMs = entry.timestamp?.getTime?.() ?? null;
+        return (
+          timestampMs !== null &&
+          timestampMs >= needsAttentionWindow.windowStart &&
+          timestampMs <= needsAttentionWindow.windowEnd
+        );
+      })
+      .sort((a, b) => {
+        const urgencyDiff = urgencyRank(b.urgency) - urgencyRank(a.urgency);
+        if (urgencyDiff !== 0) return urgencyDiff;
+        const aTime = a.timestamp?.getTime?.() ?? 0;
+        const bTime = b.timestamp?.getTime?.() ?? 0;
+        return aTime - bTime;
+      })
+      .slice(0, 5)
+      .map((entry) => ({
+        type: 'entry' as const,
+        id: entry.id,
+        title: entry.title,
+        reason:
+          entry.urgency === 'critical'
+            ? 'Critical unresolved ticket in the last 7 days'
+            : 'High urgency unresolved ticket in the last 7 days',
+        severity: entry.urgency === 'critical' ? ('Critical' as const) : ('High' as const),
+        entry,
+      }));
+
+    return entryAlerts;
+  }, [needsAttentionEntries, needsAttentionWindow.windowEnd, needsAttentionWindow.windowStart]);
+
+  const getOwnerLabel = (themeId: string) => {
+    if (themeId === 'performance' || themeId === 'bug') return 'Engineering';
+    if (themeId === 'ux' || themeId === 'feature' || themeId === 'documentation') return 'Product';
+    if (themeId === 'pricing') return 'Support';
+    return 'Support';
+  };
+
   const handleThemeSelect = (themeId: string) => {
     const params = new URLSearchParams(window.location.search);
     params.set('theme_id', themeId);
@@ -257,6 +317,7 @@ const Index = () => {
 
   const handleRefresh = () => {
     void loadFeedback();
+    setLastUpdatedAt(new Date());
   };
 
   const handleResolve = (id: string) => {
@@ -275,7 +336,179 @@ const Index = () => {
       </div>
 
       <div className="relative z-10">
-        <Header onSearch={setSearchQuery} onRefresh={handleRefresh} />
+        <Header
+          onRefresh={handleRefresh}
+          overlayLock={Boolean(selectedItem) || isTrendOpen}
+          lastUpdatedAt={lastUpdatedAt}
+          alertCount={alerts.length}
+          needsAttentionContent={
+            <section className="space-y-3 rounded-xl border border-border/60 bg-background p-4 shadow-card">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Needs Attention Now</h3>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <AIInsights feedback={needsAttentionEntries} compact />
+                <div className="rounded-xl border border-border/60 p-4 md:col-start-1 md:row-start-2">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-foreground">Emerging Issues</h4>
+                    <p className="text-xs text-muted-foreground">Last 7 days only.</p>
+                  </div>
+                  {needsAttentionEmerging.length ? (
+                    <div className="grid gap-3 max-h-[360px] overflow-y-auto pr-1 md:grid-cols-2">
+                      {needsAttentionEmerging.slice(0, 4).map((theme) => {
+                        const mentionDeltaPercent =
+                          theme.prevCount > 0
+                            ? ((theme.currentCount - theme.prevCount) / theme.prevCount) * 100
+                            : 100;
+                        const mentionTrendIcon =
+                          mentionDeltaPercent >= 0 ? (
+                            <TrendingUp className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+                          );
+                        const urgencyDelta =
+                          (theme.currentAvgUrgency ?? 0) - (theme.prevAvgUrgency ?? 0);
+                        const urgencyTrendIcon =
+                          urgencyDelta >= 0 ? (
+                            <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5 text-success" />
+                          );
+                        const negativeDelta =
+                          (theme.currentNegativeRatio ?? 0) - (theme.prevNegativeRatio ?? 0);
+                        const negativeTrendIcon =
+                          negativeDelta >= 0 ? (
+                            <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5 text-success" />
+                          );
+                        return (
+                        <div
+                          key={theme.theme_id}
+                          className="flex flex-col gap-2 rounded-lg border border-border/60 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">
+                                {theme.name}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                            {mentionTrendIcon}
+                            Mentions: {Math.abs(mentionDeltaPercent).toFixed(0)}%{' '}
+                            {mentionDeltaPercent >= 0 ? 'increase' : 'decrease'}
+                          </div>
+                          <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                            {urgencyTrendIcon}
+                            Δ urgency: {theme.prevAvgUrgency?.toFixed(2) ?? '—'} →{' '}
+                            {theme.currentAvgUrgency?.toFixed(2) ?? '—'}
+                          </div>
+                          <div className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                            {negativeTrendIcon}
+                            % Negative: {((theme.prevNegativeRatio ?? 0) * 100).toFixed(0)} →{' '}
+                            {((theme.currentNegativeRatio ?? 0) * 100).toFixed(0)}
+                          </div>
+                        </div>
+                      );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
+                      No emerging issues in the current window.
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-border/60 p-4 md:col-start-2 md:row-start-1">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-foreground">Active Alerts</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Unresolved critical issues from the last 7 days.
+                    </p>
+                  </div>
+                  {alerts.length ? (
+                    <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                      {alerts.map((alert) => {
+                        const severityClass =
+                          alert.severity === 'Critical'
+                            ? 'bg-destructive/20 text-destructive'
+                            : 'bg-warning/20 text-warning';
+                        const ownerLabel =
+                          alert.type === 'theme'
+                            ? getOwnerLabel(alert.id)
+                            : getOwnerLabel(alert.entry.issueType ?? '');
+                        const onClick = () => {
+                          if (alert.type === 'theme') {
+                            const themeLabel =
+                              issueTypeConfig[alert.id as keyof typeof issueTypeConfig]?.label ??
+                              alert.id;
+                            setSearchQuery(themeLabel);
+                          } else {
+                            setSearchQuery(alert.title);
+                            setSelectedItem(alert.entry);
+                          }
+                        };
+                        return (
+                          <TooltipProvider key={`${alert.type}-${alert.id}`}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={onClick}
+                                  className="w-full rounded-lg border border-border/60 p-3 text-left transition hover:bg-muted/20"
+                                >
+                                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                                    <div className="min-w-0 space-y-1">
+                                      <p className="text-sm font-semibold text-foreground truncate">
+                                        {alert.title}
+                                      </p>
+                                      <div className="text-xs text-muted-foreground">
+                                        Owner:{' '}
+                                        <span className="font-semibold text-foreground">{ownerLabel}</span>
+                                      </div>
+                                      <div className="text-[11px] text-muted-foreground">
+                                        Open since{' '}
+                                        <span className="font-semibold text-foreground">
+                                          {formatDistanceToNow(alert.entry.timestamp, { addSuffix: false })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1">
+                                      <Badge className={`text-[10px] ${severityClass}`}>
+                                        {alert.severity}
+                                      </Badge>
+                                      <Badge
+                                        variant="secondary"
+                                        className={`text-[10px] text-primary-foreground ${
+                                          issueTypeConfig[alert.entry.issueType as keyof typeof issueTypeConfig]
+                                            ?.color ?? ''
+                                        }`}
+                                      >
+                                        {issueTypeConfig[alert.entry.issueType as keyof typeof issueTypeConfig]
+                                          ?.label ?? alert.entry.issueType}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">
+                                {alert.reason} compared to the previous period.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
+                      No alerts triggered in the current window.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          }
+        />
 
         <main className="container mx-auto px-6 py-8 space-y-6">
           <div className="grid gap-6 grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
@@ -306,7 +539,8 @@ const Index = () => {
               {/* KPI Strip */}
               <KpiStrip
                 filters={kpiFilters}
-                entries={feedback}
+                entries={baseFilteredItems}
+                prefilteredEntries={filteredFeedback}
                 onSourceSelect={(source) => {
                   setActiveSource(source as FeedbackSource);
                 }}
@@ -374,19 +608,13 @@ const Index = () => {
 
             <div className="space-y-6">
               <TrendsCard
-                entries={feedbackForEmerging}
+                entries={baseFilteredItems}
                 issueTypeId={topIssueType}
                 issueTypeLabel={
                   topIssueType
                     ? issueTypeConfig[topIssueType as keyof typeof issueTypeConfig]?.label ??
                       topIssueType
                     : null
-                }
-                insightsContent={
-                  <div className="space-y-4">
-                    <AIInsights feedback={filteredFeedback} compact />
-                    <EmergingThemesCard themes={emergingThemes} />
-                  </div>
                 }
                 sourceValue={activeSource}
                 onSourceChange={(source) => {
@@ -440,8 +668,8 @@ const Index = () => {
       <IssueTrendModal
         open={isTrendOpen}
         onOpenChange={setIsTrendOpen}
-        entries={feedbackForEmerging}
-        summaryEntries={feedbackForEmerging}
+        entries={baseFilteredItems}
+        summaryEntries={baseFilteredItems}
         issueTypeId={trendThemeId}
         issueTypeLabel={
           trendThemeId

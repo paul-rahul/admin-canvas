@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { format } from 'date-fns';
-import { Activity, X } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { issueTypeConfig, sourceConfig, type FeedbackItem, type FeedbackSource } from '@/data/mockFeedback';
 
@@ -79,7 +78,6 @@ interface TrendsCardProps {
   onTimeFilterChange?: (timeRange: TimeRangeKey) => void;
   clearSelectionKey?: number;
   onTimeRangeSelect?: (range: { from: Date; to: Date }) => void;
-  insightsContent?: React.ReactNode;
 }
 
 export function TrendsCard({
@@ -93,12 +91,9 @@ export function TrendsCard({
   onTimeFilterChange,
   clearSelectionKey,
   onTimeRangeSelect,
-  insightsContent,
 }: TrendsCardProps) {
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
-  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [lastPresetRangeKey, setLastPresetRangeKey] = useState<TimeRangeKey>('7d');
-  const insightsPanelRef = useRef<HTMLDivElement | null>(null);
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -272,18 +267,6 @@ export function TrendsCard({
     }
   }, [issueTypeId, timeFilter, customRange]);
 
-  useEffect(() => {
-    if (!isInsightsOpen) return;
-    const handleClose = (event: MouseEvent) => {
-      if (insightsPanelRef.current?.contains(event.target as Node)) {
-        return;
-      }
-      setIsInsightsOpen(false);
-    };
-    window.addEventListener('mousedown', handleClose);
-    return () => window.removeEventListener('mousedown', handleClose);
-  }, [isInsightsOpen]);
-
   const hideOverlay = () => {
     if (!overlayRef.current) return;
     overlayRef.current.style.opacity = '0';
@@ -441,14 +424,6 @@ export function TrendsCard({
       valueSpacerClassName="h-1"
       className="relative"
     >
-      <div className="absolute right-6 top-6">
-        <Button
-          onClick={() => setIsInsightsOpen(true)}
-          className="h-9 px-5 text-sm font-semibold bg-warning text-warning-foreground hover:bg-warning/90 shadow-md shadow-warning/30"
-        >
-          AI Insights
-        </Button>
-      </div>
       <div className="flex w-full flex-col gap-1">
         <div className="flex w-full items-center justify-between gap-3">
           <p className="min-w-0 flex-1 text-sm font-bold text-foreground">
@@ -492,7 +467,6 @@ export function TrendsCard({
           className={[
             "relative h-96 w-full min-w-0 select-none",
             hasData ? "cursor-crosshair" : "",
-            isInsightsOpen ? "pointer-events-none" : "",
           ].join(' ')}
           ref={chartRef}
           onMouseDown={(event) => {
@@ -649,29 +623,6 @@ export function TrendsCard({
             />
           )}
         </div>
-        {isInsightsOpen && (
-          <div className="absolute inset-0 z-40 pointer-events-auto">
-            <div className="absolute inset-0 bg-background" />
-            <div
-              className="absolute left-6 right-6 bottom-6 top-16 overflow-auto rounded-lg border border-border/60 bg-background/90 p-4"
-              ref={insightsPanelRef}
-            >
-              <button
-                type="button"
-                className="absolute right-5 top-5 z-10 rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                aria-label="Close AI Insights"
-                onClick={() => setIsInsightsOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </button>
-              {insightsContent ? (
-                insightsContent
-              ) : (
-                <div className="text-xs text-muted-foreground">No insights available.</div>
-              )}
-            </div>
-          </div>
-        )}
         <div className="mt-2 text-sm font-semibold text-foreground text-center">{topSourceTheme}</div>
       </div>
     </KpiCard>

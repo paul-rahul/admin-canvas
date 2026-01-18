@@ -1,16 +1,27 @@
-import { Bell, Search, RefreshCw, Brain } from 'lucide-react';
+import { Bell, RefreshCw, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { format } from 'date-fns';
 
 interface HeaderProps {
-  onSearch: (query: string) => void;
   onRefresh: () => void;
+  needsAttentionContent?: React.ReactNode;
+  overlayLock?: boolean;
+  lastUpdatedAt?: Date | null;
+  alertCount?: number;
 }
 
-export function Header({ onSearch, onRefresh }: HeaderProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export function Header({
+  onRefresh,
+  needsAttentionContent,
+  overlayLock = false,
+  lastUpdatedAt,
+  alertCount = 0,
+}: HeaderProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const bellRef = useRef<HTMLButtonElement | null>(null);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -18,10 +29,19 @@ export function Header({ onSearch, onRefresh }: HeaderProps) {
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    onSearch(e.target.value);
-  };
+  useEffect(() => {
+    if (!isOverlayOpen) return;
+    const handleClose = (event: MouseEvent) => {
+      if (overlayLock) return;
+      const target = event.target as Node;
+      if (overlayRef.current?.contains(target) || bellRef.current?.contains(target)) {
+        return;
+      }
+      setIsOverlayOpen(false);
+    };
+    window.addEventListener('mousedown', handleClose);
+    return () => window.removeEventListener('mousedown', handleClose);
+  }, [isOverlayOpen, overlayLock]);
 
   return (
     <header className="glass sticky top-0 z-50 px-6 py-4 border-b border-border/50">
@@ -38,16 +58,12 @@ export function Header({ onSearch, onRefresh }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search feedback..."
-              value={searchQuery}
-              onChange={handleSearch}
-              className="pl-10 bg-muted/50 border-border/50 focus:border-primary"
-            />
+          <div className="text-xs text-muted-foreground">
+            Last updated:{' '}
+            <span className="font-semibold text-foreground">
+              {lastUpdatedAt ? format(lastUpdatedAt, 'MM/dd/yyyy HH:mm') : '—'}
+            </span>
           </div>
-
           <Button
             variant="ghost"
             size="icon"
@@ -57,12 +73,32 @@ export function Header({ onSearch, onRefresh }: HeaderProps) {
             <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
 
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-primary-foreground">
-              3
-            </span>
-          </Button>
+          <div className="relative">
+            <Button
+              ref={bellRef}
+              variant="ghost"
+              size="icon"
+              className="relative bg-warning/20 text-warning hover:bg-warning/30 shadow-[0_0_16px_hsl(var(--warning)/0.6)] ring-1 ring-warning/50"
+              onClick={() => setIsOverlayOpen((prev) => !prev)}
+              aria-expanded={isOverlayOpen}
+              aria-label="Toggle Needs Attention overlay"
+            >
+              <Bell className="h-5 w-5" />
+              {alertCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-primary-foreground">
+                  {alertCount}
+                </span>
+              )}
+            </Button>
+            {isOverlayOpen && needsAttentionContent && (
+              <div
+                ref={overlayRef}
+                className="absolute right-0 top-full mt-2 w-[min(980px,90vw)] z-50"
+              >
+                {needsAttentionContent}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>
