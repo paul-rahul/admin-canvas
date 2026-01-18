@@ -125,7 +125,8 @@ const TIME_PRESETS = [
   { value: 'custom' as const, label: 'Custom range' },
 ];
 const SORT_OPTIONS = [
-  { value: 'time', label: 'Updated' },
+  { value: 'created', label: 'Creation Date' },
+  { value: 'updated', label: 'Last Updated' },
   { value: 'urgency', label: 'Urgency' },
   { value: 'sentiment', label: 'Sentiment' },
 ];
@@ -183,7 +184,7 @@ function FeedbackTableComponent({
   const [draftFilters, setDraftFilters] = useState<TableFilters>(initialFilters);
   const [isFilterOpen, setIsFilterOpen] = useState<'icon' | 'plus' | null>(null);
   const [searchInput, setSearchInput] = useState(initialFilters.search);
-  const [sortKey, setSortKey] = useState<'time' | 'urgency' | 'sentiment'>('time');
+  const [sortKey, setSortKey] = useState<'created' | 'updated' | 'urgency' | 'sentiment'>('updated');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [baseDefaultFilters, setBaseDefaultFilters] = useState<TableFilters>(() => ({
     ...DEFAULT_FILTERS,
@@ -336,6 +337,12 @@ function FeedbackTableComponent({
     return item.timestamp?.getTime?.() ?? 0;
   }, []);
 
+  const getCreatedAtMs = useCallback((item: FeedbackItem) => {
+    const created = item.createdAt ? new Date(item.createdAt).getTime() : NaN;
+    if (!Number.isNaN(created)) return created;
+    return item.timestamp?.getTime?.() ?? 0;
+  }, []);
+
   const sortedFeedback = useMemo(() => {
     const urgencyRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
     const sentimentRank: Record<string, number> = { negative: 3, neutral: 2, positive: 1 };
@@ -343,8 +350,12 @@ function FeedbackTableComponent({
     indexed.sort((a, b) => {
       const aItem = a.item;
       const bItem = b.item;
-      if (sortKey === 'time') {
+      if (sortKey === 'updated') {
         const diff = sortDir === 'desc' ? getUpdatedAtMs(bItem) - getUpdatedAtMs(aItem) : getUpdatedAtMs(aItem) - getUpdatedAtMs(bItem);
+        if (diff !== 0) return diff;
+      }
+      if (sortKey === 'created') {
+        const diff = sortDir === 'desc' ? getCreatedAtMs(bItem) - getCreatedAtMs(aItem) : getCreatedAtMs(aItem) - getCreatedAtMs(bItem);
         if (diff !== 0) return diff;
       }
       if (sortKey === 'urgency') {
@@ -371,7 +382,7 @@ function FeedbackTableComponent({
       return timeDiff !== 0 ? timeDiff : a.index - b.index;
     });
     return indexed.map((entry) => entry.item);
-  }, [filteredFeedback, sortKey, sortDir, getUpdatedAtMs]);
+  }, [filteredFeedback, sortKey, sortDir, getUpdatedAtMs, getCreatedAtMs]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedback.length / pageSize));
   const pageNumbers = useMemo(
@@ -1337,7 +1348,8 @@ function FeedbackTableComponent({
                     'Urgency',
                     'Issue Type',
                     'Owner',
-                    'Updated',
+                    'Time Created',
+                    'Last Updated',
                     'Status',
                     'External Ref',
                     'External Url',
@@ -1351,6 +1363,7 @@ function FeedbackTableComponent({
                     item.urgency,
                     issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
                     formatFilterLabel(normalizeOwner(item)),
+                    item.createdAt ?? '',
                     item.updatedAt ?? item.createdAt ?? '',
                     formatFilterLabel(normalizeStatus(item)),
                     item.externalRef ?? '',
@@ -1496,7 +1509,8 @@ function FeedbackTableComponent({
               <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Urgency</th>
               <th className="w-[120px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Type</th>
               <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</th>
-              <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Updated</th>
+              <th className="w-[120px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Time Created</th>
+              <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Last Updated</th>
               <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
               <th className="w-[70px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Link/Ref</th>
             </tr>
@@ -1511,6 +1525,8 @@ function FeedbackTableComponent({
                 issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
               const ownerLabel = formatFilterLabel(normalizeOwner(item));
               const statusLabel = formatFilterLabel(normalizeStatus(item));
+              const createdAt = item.createdAt ?? null;
+              const createdDate = createdAt ? new Date(createdAt) : null;
               const updatedAt = item.updatedAt ?? item.createdAt;
               const updatedDate = updatedAt ? new Date(updatedAt) : null;
 
@@ -1558,6 +1574,13 @@ function FeedbackTableComponent({
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground truncate">{ownerLabel}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs text-muted-foreground truncate">
+                      {createdDate
+                        ? formatDistanceToNow(createdDate, { addSuffix: true })
+                        : '—'}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground truncate">
