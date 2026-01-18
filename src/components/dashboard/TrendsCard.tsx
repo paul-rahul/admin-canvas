@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { format } from 'date-fns';
-import { Activity } from 'lucide-react';
+import { Activity, Info } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { issueTypeConfig, sourceConfig, type FeedbackItem, type FeedbackSource } from '@/data/mockFeedback';
+import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type TimeRangeKey = '1h' | '7d' | '1m' | '3m' | '6m' | '1y';
 type SourceKey = FeedbackSource | 'all';
@@ -66,6 +67,35 @@ const TrendsTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
     </div>
   );
 };
+
+const TrendsLegend = () => (
+  <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+    <div className="flex items-center gap-2">
+      <span className="h-2 w-2 rounded-full bg-primary" />
+      <span>Tickets</span>
+    </div>
+    <div className="flex items-center gap-2">
+      <span className="h-2 w-2 rounded-full bg-info" />
+      <span>Avg Urgency</span>
+      <TooltipProvider>
+        <UiTooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full text-muted-foreground hover:text-foreground"
+              aria-label="Avg urgency info"
+            >
+              <Info className="h-3 w-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
+            Avg urgency is the mean of urgency scores (Low=1, Medium=2, High=3, Critical=4) in each time bucket.
+          </TooltipContent>
+        </UiTooltip>
+      </TooltipProvider>
+    </div>
+  </div>
+);
 
 interface TrendsCardProps {
   entries: FeedbackItem[];
@@ -204,12 +234,15 @@ export function TrendsCard({
       }
     });
 
-    return buckets.map((bucket) => ({
+    const basePoints = buckets.map((bucket) => ({
       label: format(new Date(bucket.start), formatString),
       count: bucket.count,
       avgUrgency: bucket.urgencyCount ? bucket.urgencySum / bucket.urgencyCount : null,
       startMs: bucket.start,
       endMs: bucket.start + bucketMs,
+    }));
+    return basePoints.map((point) => ({
+      ...point,
     }));
   }, [issueTypeId, timeFilter, syncedRangeKey, lastPresetRangeKey, customRange, trendEntries]);
 
@@ -577,7 +610,7 @@ export function TrendsCard({
                   width={24}
                 />
                 <Tooltip content={<TrendsTooltip />} />
-                <Legend />
+                <Legend content={<TrendsLegend />} />
               <Line
                 yAxisId="left"
                 type="monotone"
@@ -596,11 +629,11 @@ export function TrendsCard({
                 name="Avg Urgency"
                 stroke="hsl(199 89% 48%)"
                 strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-                connectNulls
-                isAnimationActive={false}
-              />
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           ) : (
