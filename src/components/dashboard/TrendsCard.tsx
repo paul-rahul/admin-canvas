@@ -98,6 +98,7 @@ export function TrendsCard({
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [lastPresetRangeKey, setLastPresetRangeKey] = useState<TimeRangeKey>('7d');
+  const insightsPanelRef = useRef<HTMLDivElement | null>(null);
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -245,7 +246,12 @@ export function TrendsCard({
 
   useEffect(() => {
     if (!isInsightsOpen) return;
-    const handleClose = () => setIsInsightsOpen(false);
+    const handleClose = (event: MouseEvent) => {
+      if (insightsPanelRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setIsInsightsOpen(false);
+    };
     window.addEventListener('mousedown', handleClose);
     return () => window.removeEventListener('mousedown', handleClose);
   }, [isInsightsOpen]);
@@ -422,7 +428,7 @@ export function TrendsCard({
             value={selectedSource}
             onValueChange={(value) => onSourceChange?.(value as SourceKey)}
           >
-            <SelectTrigger className="h-7 w-[120px] text-[11px]">
+            <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
@@ -438,7 +444,7 @@ export function TrendsCard({
             value={displayRangeKey}
             onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}
           >
-            <SelectTrigger className="h-7 w-[120px] text-[11px]">
+            <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -614,6 +620,7 @@ export function TrendsCard({
             <div className="absolute inset-0 bg-background" />
             <div
               className="absolute left-6 right-6 bottom-6 top-16 overflow-auto rounded-lg border border-border/60 bg-background/90 p-4"
+              ref={insightsPanelRef}
             >
               <button
                 type="button"

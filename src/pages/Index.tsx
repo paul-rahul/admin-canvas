@@ -297,7 +297,12 @@ const Index = () => {
                       topIssueType
                     : null
                 }
-                insightsContent={<AIInsights feedback={filteredFeedback} />}
+                insightsContent={
+                  <div className="space-y-4">
+                    <AIInsights feedback={filteredFeedback} compact />
+                    <EmergingThemesCard themes={emergingThemes} />
+                  </div>
+                }
                 sourceValue={activeSource}
                 onSourceChange={(source) => {
                   markFiltering();
@@ -334,13 +339,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <EmergingThemesCard
-              themes={emergingThemes}
-              onSelectTheme={handleThemeSelect}
-              onViewTrend={handleViewTrend}
-            />
-          </div>
+          <div className="space-y-4"></div>
 
           {/* Feedback Table */}
           <FeedbackTable feedback={filteredFeedback} onSelect={setSelectedItem} />

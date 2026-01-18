@@ -8,15 +8,11 @@ import { Info, Flame } from 'lucide-react';
 interface EmergingThemesCardProps {
   themes: EmergingTheme[];
   isLoading?: boolean;
-  onSelectTheme?: (themeId: string) => void;
-  onViewTrend?: (themeId: string) => void;
 }
 
 export function EmergingThemesCard({
   themes,
   isLoading = false,
-  onSelectTheme,
-  onViewTrend,
 }: EmergingThemesCardProps) {
   return (
     <div className="glass rounded-xl p-6 shadow-card">
@@ -46,7 +42,7 @@ export function EmergingThemesCard({
         </div>
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {isLoading && (
           <>
             <Skeleton className="h-12 w-full" />
@@ -56,7 +52,7 @@ export function EmergingThemesCard({
         )}
 
         {!isLoading && themes.length === 0 && (
-          <div className="rounded-lg border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border/70 p-4 text-sm text-muted-foreground sm:col-span-2">
             No emerging issue themes detected.
           </div>
         )}
@@ -71,33 +67,17 @@ export function EmergingThemesCard({
             return (
               <div
                 key={theme.theme_id}
-                onClick={() => onViewTrend?.(theme.theme_id)}
                 className={cn(
-                  "w-full rounded-lg border border-border/50 px-3 py-2 text-left transition hover:bg-muted/30",
-                  !onViewTrend && "cursor-default opacity-80",
-                  onViewTrend && "cursor-pointer"
+                  "w-full rounded-lg border border-border/50 px-3 py-2 text-left",
+                  "opacity-90"
                 )}
-                role={onViewTrend ? "button" : undefined}
-                tabIndex={onViewTrend ? 0 : undefined}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    onViewTrend?.(theme.theme_id);
-                  }
-                }}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">{theme.name}</p>
-                    <p className="text-xs text-muted-foreground">{theme.reasonText}</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>
-                      {theme.prevCount} → {theme.currentCount}
-                    </span>
-                    <span>|</span>
-                    <span>Δ urgency {urgencyDelta}</span>
-                  </div>
+                <div>
+                  <p className="text-sm font-medium">{theme.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Mentions increased: {theme.prevCount} → {theme.currentCount}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Δ urgency: {urgencyDelta}</p>
                 </div>
               </div>
             );

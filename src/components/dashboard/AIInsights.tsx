@@ -4,6 +4,7 @@ import { FeedbackItem } from '@/data/mockFeedback';
 
 interface AIInsightsProps {
   feedback: FeedbackItem[];
+  compact?: boolean;
 }
 
 type Insight = {
@@ -17,7 +18,7 @@ type InsightPayload = {
   summary?: string;
 };
 
-export function AIInsights({ feedback }: AIInsightsProps) {
+export function AIInsights({ feedback, compact = false }: AIInsightsProps) {
   const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
 
   const { criticalCount, featureRequests } = useMemo(() => {
@@ -60,6 +61,8 @@ export function AIInsights({ feedback }: AIInsightsProps) {
     return list.filter((insight) => insight.title !== 'Critical Issues');
   }, [serverInsights, fallbackInsights]);
 
+  const [trendingInsight, featureInsight] = insights;
+
   const typeStyles = {
     warning: 'border-l-warning bg-warning/5',
     info: 'border-l-info bg-info/5',
@@ -101,37 +104,75 @@ export function AIInsights({ feedback }: AIInsightsProps) {
   return (
     <div className="glass rounded-xl p-6 shadow-card h-full">
       <div className="flex items-center gap-2 mb-4">
-        <div className="p-2 rounded-lg gradient-primary">
-          <Sparkles className="h-5 w-5 text-primary-foreground" />
+        <div className="p-1.5 rounded-lg gradient-primary">
+          <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">AI Insights</h3>
-          <p className="text-xs text-muted-foreground">Powered by Workers AI</p>
+          <h3 className="text-base font-semibold">AI Insights</h3>
         </div>
       </div>
-      
-      <div className="space-y-4">
-        {insights.map((insight, index) => (
-          <div
-            key={index}
-            className={`p-4 rounded-lg border-l-4 ${typeStyles[insight.type]}`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              {insight.type === 'warning' && (
-                <AlertTriangle className={`h-4 w-4 ${iconStyles[insight.type]}`} />
-              )}
-              {insight.type === 'info' && (
-                <TrendingUp className={`h-4 w-4 ${iconStyles[insight.type]}`} />
-              )}
-              {insight.type === 'success' && (
-                <Lightbulb className={`h-4 w-4 ${iconStyles[insight.type]}`} />
-              )}
-              <h4 className="font-medium text-sm">{insight.title}</h4>
+
+      {compact ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {trendingInsight && (
+            <div className={`p-4 rounded-lg border-l-4 ${typeStyles[trendingInsight.type]}`}>
+              <div className="flex items-center gap-2 mb-2">
+                {trendingInsight.type === 'warning' && (
+                  <AlertTriangle className={`h-4 w-4 ${iconStyles[trendingInsight.type]}`} />
+                )}
+                {trendingInsight.type === 'info' && (
+                  <TrendingUp className={`h-4 w-4 ${iconStyles[trendingInsight.type]}`} />
+                )}
+                {trendingInsight.type === 'success' && (
+                  <Lightbulb className={`h-4 w-4 ${iconStyles[trendingInsight.type]}`} />
+                )}
+                <h4 className="font-medium text-sm">{trendingInsight.title}</h4>
+              </div>
+              <p className="text-sm text-muted-foreground">{trendingInsight.content}</p>
             </div>
-            <p className="text-sm text-muted-foreground">{insight.content}</p>
-          </div>
-        ))}
-      </div>
+          )}
+          {featureInsight && (
+            <div className={`p-4 rounded-lg border-l-4 ${typeStyles[featureInsight.type]}`}>
+              <div className="flex items-center gap-2 mb-2">
+                {featureInsight.type === 'warning' && (
+                  <AlertTriangle className={`h-4 w-4 ${iconStyles[featureInsight.type]}`} />
+                )}
+                {featureInsight.type === 'info' && (
+                  <TrendingUp className={`h-4 w-4 ${iconStyles[featureInsight.type]}`} />
+                )}
+                {featureInsight.type === 'success' && (
+                  <Lightbulb className={`h-4 w-4 ${iconStyles[featureInsight.type]}`} />
+                )}
+                <h4 className="font-medium text-sm">{featureInsight.title}</h4>
+              </div>
+              <p className="text-sm text-muted-foreground">{featureInsight.content}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {insights.map((insight, index) => (
+            <div
+              key={index}
+              className={`p-4 rounded-lg border-l-4 ${typeStyles[insight.type]}`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                {insight.type === 'warning' && (
+                  <AlertTriangle className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+                )}
+                {insight.type === 'info' && (
+                  <TrendingUp className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+                )}
+                {insight.type === 'success' && (
+                  <Lightbulb className={`h-4 w-4 ${iconStyles[insight.type]}`} />
+                )}
+                <h4 className="font-medium text-sm">{insight.title}</h4>
+              </div>
+              <p className="text-sm text-muted-foreground">{insight.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );
