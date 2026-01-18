@@ -63,15 +63,15 @@ const TrendsTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
         <span className="font-semibold text-foreground">{data.count}</span>
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
-        <span>Avg urgency</span>
+        <span>Urgency %</span>
         <span className="font-semibold text-foreground">
-          {data.avgUrgency !== null ? data.avgUrgency.toFixed(2) : '—'}
+          {data.avgUrgency !== null ? `${data.avgUrgency.toFixed(1)}%` : '—'}
         </span>
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
-        <span>Avg negative</span>
+        <span>Negative %</span>
         <span className="font-semibold text-foreground">
-          {data.avgNegative !== null ? data.avgNegative.toFixed(2) : '—'}
+          {data.avgNegative !== null ? `${data.avgNegative.toFixed(1)}%` : '—'}
         </span>
       </div>
     </div>
@@ -116,7 +116,7 @@ const TrendsLegend = ({
         className="flex items-center gap-2 underline-offset-4 hover:underline"
       >
         <span className="h-2 w-2 rounded-full bg-info" />
-        <span>Avg Urgency</span>
+        <span>Urgency %</span>
       </button>
       <TooltipProvider>
         <UiTooltip>
@@ -130,7 +130,7 @@ const TrendsLegend = ({
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
-            Avg urgency is the mean of urgency scores (Low=1, Medium=2, High=3, Critical=4) in each time bucket.
+            Urgency % = (average urgency score / 4) x 100 per time bucket.
           </TooltipContent>
         </UiTooltip>
       </TooltipProvider>
@@ -143,7 +143,7 @@ const TrendsLegend = ({
         className="flex items-center gap-2 underline-offset-4 hover:underline"
       >
         <span className="h-2 w-2 rounded-full bg-destructive" />
-        <span>Avg Negative</span>
+        <span>Negative %</span>
       </button>
       <TooltipProvider>
         <UiTooltip>
@@ -157,7 +157,7 @@ const TrendsLegend = ({
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
-            Avg negative = (negative tickets / total tickets) x 4.
+            Negative % = (negative tickets / total tickets) x 100 per time bucket.
           </TooltipContent>
         </UiTooltip>
       </TooltipProvider>
@@ -330,9 +330,11 @@ function TrendsCardComponent({
     const basePoints = buckets.map((bucket) => ({
       label: format(new Date(bucket.start), formatString),
       count: bucket.count,
-      avgUrgency: bucket.urgencyCount ? bucket.urgencySum / bucket.urgencyCount : null,
+      avgUrgency: bucket.urgencyCount
+        ? (bucket.urgencySum / bucket.urgencyCount / 4) * 100
+        : null,
       avgNegative: bucket.sentimentCount
-        ? (bucket.negativeCount / bucket.sentimentCount) * 4
+        ? (bucket.negativeCount / bucket.sentimentCount) * 100
         : null,
       startMs: bucket.start,
       endMs: bucket.start + bucketMs,
@@ -667,8 +669,9 @@ function TrendsCardComponent({
             <YAxis
               yAxisId="right"
               orientation="right"
-              domain={[0, 4]}
+              domain={[0, 100]}
               tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
+              tickFormatter={(value) => `${value}%`}
               width={24}
             />
             <Tooltip content={<TrendsTooltip />} />
@@ -690,7 +693,7 @@ function TrendsCardComponent({
                 yAxisId="right"
                 type="monotone"
                 dataKey="avgUrgency"
-                name="Avg Urgency"
+                name="Urgency %"
                 stroke="hsl(199 89% 48%)"
                 strokeWidth={2}
                 dot={false}
@@ -704,7 +707,7 @@ function TrendsCardComponent({
                 yAxisId="right"
                 type="monotone"
                 dataKey="avgNegative"
-                name="Avg Negative"
+                name="Negative %"
                 stroke="hsl(var(--destructive))"
                 strokeWidth={2}
                 dot={false}
@@ -783,7 +786,7 @@ function TrendsCardComponent({
     >
       <div className="flex w-full flex-col gap-1">
         {renderFilters()}
-        {!isExpanded && renderChart("h-96", true)}
+        {!isExpanded && renderChart("h-80", true)}
         <div className="mt-2">
           <TrendsLegend visibility={seriesVisibility} onToggle={toggleSeries} />
         </div>

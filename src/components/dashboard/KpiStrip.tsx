@@ -42,7 +42,7 @@ function KpiStripComponent({
       counts[issueType] = (counts[issueType] ?? 0) + 1;
     });
     const total = feedbackEntries.length || 1;
-    return Object.entries(counts)
+    const sorted = Object.entries(counts)
       .map(([issueType, count]) => ({
         issueType,
         count,
@@ -53,6 +53,21 @@ function KpiStripComponent({
           'bg-muted-foreground',
       }))
       .sort((a, b) => b.count - a.count);
+    if (sorted.length <= 4) return sorted;
+    const top = sorted.slice(0, 4);
+    const rest = sorted.slice(4);
+    const restCount = rest.reduce((sum, entry) => sum + entry.count, 0);
+    const restPercent = Math.max(2, Math.round((restCount / total) * 100));
+    return [
+      ...top,
+      {
+        issueType: 'other',
+        count: restCount,
+        percent: restPercent,
+        label: 'Others',
+        color: 'bg-muted-foreground',
+      },
+    ];
   }, [feedbackEntries]);
 
   const sourceData = useMemo(() => {

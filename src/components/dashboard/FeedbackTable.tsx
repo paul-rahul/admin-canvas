@@ -17,11 +17,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Headphones, MessageCircle, Github, Twitter, Mail, Users, CheckCircle2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Filter as FilterIcon,
+  Github,
+  Headphones,
+  Mail,
+  MessageCircle,
+  Twitter,
+  Users,
+  X,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  DEFAULT_FILTERS,
+  DEFAULT_STATUSES,
+  TableFilters,
+  applyFilters,
+  formatFilterLabel,
+  normalizeOwner,
+  normalizeStatus,
+  parseFiltersFromSearch,
+  serializeFiltersToSearch,
+} from '@/utils/feedbackTableFilters';
 
 const sourceIcons: Record<string, React.ElementType> = {
   headphones: Headphones,
@@ -38,6 +67,53 @@ interface FeedbackTableProps {
 }
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100];
+const SOURCE_OPTIONS = [
+  { value: 'email', label: 'Email' },
+  { value: 'support', label: 'Support' },
+  { value: 'discord', label: 'Discord' },
+  { value: 'github', label: 'GitHub' },
+  { value: 'twitter', label: 'Twitter' },
+  { value: 'forum', label: 'Forum' },
+  { value: 'other', label: 'Other' },
+];
+const SENTIMENT_OPTIONS = [
+  { value: 'negative', label: 'Negative' },
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'positive', label: 'Positive' },
+];
+const URGENCY_OPTIONS = [
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
+const ISSUE_TYPE_OPTIONS = [
+  { value: 'performance', label: 'Performance' },
+  { value: 'bug', label: 'Bug' },
+  { value: 'ux', label: 'UX' },
+  { value: 'feature', label: 'Feature' },
+  { value: 'pricing', label: 'Pricing' },
+  { value: 'documentation', label: 'Docs' },
+];
+const OWNER_OPTIONS = [
+  { value: 'product', label: 'Product' },
+  { value: 'engineering', label: 'Engineering' },
+  { value: 'support', label: 'Support' },
+  { value: 'design', label: 'Design' },
+  { value: 'unassigned', label: 'Unassigned/Unknown' },
+];
+const STATUS_OPTIONS = [
+  { value: 'unresolved', label: 'Unresolved' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'ignored', label: "Ignored/Won't fix" },
+];
+const TIME_PRESETS = [
+  { value: '24h' as const, label: 'Last 24h' },
+  { value: '7d' as const, label: 'Last 7d' },
+  { value: '30d' as const, label: 'Last 30d' },
+  { value: 'custom' as const, label: 'Custom range' },
+];
 
 const getPageNumbers = (current: number, total: number) => {
   if (total <= 5) {
@@ -65,41 +141,161 @@ const getPageNumbers = (current: number, total: number) => {
 function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterIssueType, setFilterIssueType] = useState<'all' | string>('all');
+  const initialFilters = useMemo(() => parseFiltersFromSearch(window.location.search), []);
+  const hasQueryParams = useMemo(() => window.location.search.length > 1, []);
+  const [filters, setFilters] = useState<TableFilters>(initialFilters);
+  const [searchInput, setSearchInput] = useState(initialFilters.search);
   const [sortKey, setSortKey] = useState<'time_desc' | 'time_asc' | 'urgency' | 'sentiment'>(
     'time_desc'
   );
+  const [baseDefaultFilters, setBaseDefaultFilters] = useState<TableFilters>(() => ({
+    ...DEFAULT_FILTERS,
+    timePreset: initialFilters.timePreset,
+    startDate: initialFilters.startDate,
+    endDate: initialFilters.endDate,
+  }));
+
+  const otherIssueTypes = useMemo(() => {
+    const known = new Set(ISSUE_TYPE_OPTIONS.map((option) => option.value));
+    const unique = new Set<string>();
+    feedback.forEach((item) => {
+      if (!known.has(item.issueType)) unique.add(item.issueType);
+    });
+    return Array.from(unique).sort();
+  }, [feedback]);
+
+  const ownerOptions = useMemo(() => {
+    const present = new Set<string>();
+    feedback.forEach((item) => {
+      present.add(normalizeOwner(item));
+    });
+    return OWNER_OPTIONS.filter((option) => present.has(option.value) || option.value === 'unassigned');
+  }, [feedback]);
+
+  const statusOptions = useMemo(() => {
+    const present = new Set<string>();
+    feedback.forEach((item) => {
+      present.add(normalizeStatus(item));
+    });
+    return STATUS_OPTIONS.filter(
+      (option) => present.has(option.value) || DEFAULT_STATUSES.includes(option.value)
+    );
+  }, [feedback]);
+
+  const otherSources = useMemo(() => {
+    const known = new Set(SOURCE_OPTIONS.map((option) => option.value).filter((value) => value !== 'other'));
+    const unique = new Set<string>();
+    feedback.forEach((item) => {
+      if (!known.has(item.source)) unique.add(item.source);
+    });
+    return Array.from(unique).sort();
+  }, [feedback]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilters((prev) => ({ ...prev, search: searchInput }));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const query = serializeFiltersToSearch(filters);
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState(null, '', nextUrl);
+  }, [filters]);
+
+  const appliedFilters = useMemo(() => {
+    if (!filters.sources.includes('other')) return filters;
+    const expandedSources = filters.sources
+      .filter((value) => value !== 'other')
+      .concat(otherSources);
+    return { ...filters, sources: expandedSources };
+  }, [filters, otherSources]);
 
   const filteredFeedback = useMemo(() => {
-    const needle = searchQuery.trim().toLowerCase();
-    let scoped = feedback;
-    if (filterIssueType !== 'all') {
-      scoped = scoped.filter((item) => item.issueType === filterIssueType);
+    return applyFilters(feedback, appliedFilters);
+  }, [feedback, appliedFilters]);
+
+  useEffect(() => {
+    if (hasQueryParams || feedback.length === 0) return;
+    const timestamps = feedback
+      .map((item) => item.timestamp?.getTime?.() ?? null)
+      .filter((value): value is number => value !== null);
+    if (!timestamps.length) return;
+    const min = Math.min(...timestamps);
+    const max = Math.max(...timestamps);
+    const windowMs = max - min;
+    const toDateString = (value: number) => {
+      const date = new Date(value);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+        date.getDate()
+      ).padStart(2, '0')}`;
+    };
+    let nextPreset: TableFilters['timePreset'] = '7d';
+    let nextStart: string | null = null;
+    let nextEnd: string | null = null;
+    if (windowMs <= 24 * 60 * 60 * 1000) {
+      nextPreset = '24h';
+    } else if (windowMs <= 7 * 24 * 60 * 60 * 1000) {
+      nextPreset = '7d';
+    } else if (windowMs <= 30 * 24 * 60 * 60 * 1000) {
+      nextPreset = '30d';
+    } else {
+      nextPreset = 'custom';
+      nextStart = toDateString(min);
+      nextEnd = toDateString(max);
     }
-    if (!needle) return scoped;
-    return scoped.filter((item) => item.title.toLowerCase().includes(needle));
-  }, [feedback, searchQuery, filterIssueType]);
+    setBaseDefaultFilters((prev) => ({
+      ...prev,
+      timePreset: nextPreset,
+      startDate: nextStart,
+      endDate: nextEnd,
+    }));
+    setFilters((prev) => {
+      if (
+        prev.timePreset === baseDefaultFilters.timePreset &&
+        prev.startDate === baseDefaultFilters.startDate &&
+        prev.endDate === baseDefaultFilters.endDate
+      ) {
+        return {
+          ...prev,
+          timePreset: nextPreset,
+          startDate: nextStart,
+          endDate: nextEnd,
+        };
+      }
+      return prev;
+    });
+  }, [feedback, hasQueryParams, baseDefaultFilters.timePreset, baseDefaultFilters.startDate, baseDefaultFilters.endDate]);
 
   const sortedFeedback = useMemo(() => {
-    const items = [...filteredFeedback];
     const urgencyRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
     const sentimentRank: Record<string, number> = { negative: 3, neutral: 2, positive: 1 };
-    items.sort((a, b) => {
+    const indexed = filteredFeedback.map((item, index) => ({ item, index }));
+    indexed.sort((a, b) => {
+      const aItem = a.item;
+      const bItem = b.item;
       if (sortKey === 'time_desc' || sortKey === 'time_asc') {
-        const aTime = a.timestamp?.getTime?.() ?? 0;
-        const bTime = b.timestamp?.getTime?.() ?? 0;
-        return sortKey === 'time_desc' ? bTime - aTime : aTime - bTime;
+        const aTime = aItem.timestamp?.getTime?.() ?? 0;
+        const bTime = bItem.timestamp?.getTime?.() ?? 0;
+        const diff = sortKey === 'time_desc' ? bTime - aTime : aTime - bTime;
+        return diff !== 0 ? diff : a.index - b.index;
       }
       if (sortKey === 'urgency') {
-        return (urgencyRank[b.urgency] ?? 0) - (urgencyRank[a.urgency] ?? 0);
+        const diff = (urgencyRank[bItem.urgency] ?? 0) - (urgencyRank[aItem.urgency] ?? 0);
+        if (diff !== 0) return diff;
       }
       if (sortKey === 'sentiment') {
-        return (sentimentRank[b.sentiment] ?? 0) - (sentimentRank[a.sentiment] ?? 0);
+        const diff =
+          (sentimentRank[bItem.sentiment] ?? 0) - (sentimentRank[aItem.sentiment] ?? 0);
+        if (diff !== 0) return diff;
       }
-      return 0;
+      const aTime = aItem.timestamp?.getTime?.() ?? 0;
+      const bTime = bItem.timestamp?.getTime?.() ?? 0;
+      const timeDiff = bTime - aTime;
+      return timeDiff !== 0 ? timeDiff : a.index - b.index;
     });
-    return items;
+    return indexed.map((entry) => entry.item);
   }, [filteredFeedback, sortKey]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedback.length / pageSize));
@@ -113,30 +309,185 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     return sortedFeedback.slice(start, start + pageSize);
   }, [currentPage, sortedFeedback, pageSize]);
 
+  const totalCount = feedback.length;
+  const filteredCount = filteredFeedback.length;
+
+  const isSameList = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const sortedA = [...a].sort();
+    const sortedB = [...b].sort();
+    return sortedA.every((value, index) => value === sortedB[index]);
+  };
+
+  const isDefaultFilters =
+    isSameList(filters.sources, baseDefaultFilters.sources) &&
+    isSameList(filters.sentiments, baseDefaultFilters.sentiments) &&
+    isSameList(filters.urgencies, baseDefaultFilters.urgencies) &&
+    filters.urgencyHighPlus === baseDefaultFilters.urgencyHighPlus &&
+    isSameList(filters.issueTypes, baseDefaultFilters.issueTypes) &&
+    isSameList(filters.owners, baseDefaultFilters.owners) &&
+    isSameList(filters.statuses, baseDefaultFilters.statuses) &&
+    filters.timePreset === baseDefaultFilters.timePreset &&
+    filters.startDate === baseDefaultFilters.startDate &&
+    filters.endDate === baseDefaultFilters.endDate &&
+    filters.search === baseDefaultFilters.search;
+
+  const activeFilterCount = [
+    filters.sources.length ? 'Source' : null,
+    filters.sentiments.length ? 'Sentiment' : null,
+    filters.urgencyHighPlus || filters.urgencies.length ? 'Urgency' : null,
+    filters.issueTypes.length ? 'Issue Type' : null,
+    filters.owners.length ? 'Owner' : null,
+    !isSameList(filters.statuses, baseDefaultFilters.statuses) ? 'Status' : null,
+    filters.timePreset !== baseDefaultFilters.timePreset || filters.startDate || filters.endDate
+      ? 'Time'
+      : null,
+    filters.search.trim() ? 'Search' : null,
+  ].filter(Boolean).length;
+
+  const filterSummary = isDefaultFilters
+    ? 'All filters'
+    : `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'}`;
+
+  const chips = [];
+  if (filters.sources.length) {
+    const label = filters.sources
+      .map((value) => SOURCE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+      .join(', ');
+    chips.push({ key: 'sources', label: `Source: ${label}` });
+  }
+  if (filters.sentiments.length) {
+    const label = filters.sentiments
+      .map((value) => SENTIMENT_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+      .join(', ');
+    chips.push({ key: 'sentiments', label: `Sentiment: ${label}` });
+  }
+  if (filters.urgencyHighPlus) {
+    chips.push({ key: 'urgency_high', label: 'Urgency: High+' });
+  } else if (filters.urgencies.length) {
+    const label = filters.urgencies
+      .map((value) => URGENCY_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+      .join(', ');
+    chips.push({ key: 'urgencies', label: `Urgency: ${label}` });
+  }
+  if (filters.issueTypes.length) {
+    const label = filters.issueTypes
+      .map((value) => ISSUE_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+      .join(', ');
+    chips.push({ key: 'issueTypes', label: `Issue Type: ${label}` });
+  }
+  if (filters.owners.length) {
+    const label = filters.owners
+      .map((value) => OWNER_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+      .join(', ');
+    chips.push({ key: 'owners', label: `Owner: ${label}` });
+  }
+  if (!isSameList(filters.statuses, baseDefaultFilters.statuses)) {
+    const label = filters.statuses
+      .map((value) => STATUS_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+      .join(', ');
+    chips.push({ key: 'statuses', label: `Status: ${label}` });
+  }
+  if (
+    filters.timePreset !== baseDefaultFilters.timePreset ||
+    filters.startDate ||
+    filters.endDate
+  ) {
+    const timeLabel =
+      filters.timePreset === 'custom'
+        ? `${filters.startDate ?? '—'} → ${filters.endDate ?? '—'}`
+        : TIME_PRESETS.find((option) => option.value === filters.timePreset)?.label ?? 'Time';
+    chips.push({ key: 'time', label: `Time: ${timeLabel}` });
+  }
+  if (filters.search.trim()) {
+    chips.push({ key: 'search', label: `Search: ${filters.search.trim()}` });
+  }
+
+  type FilterListKey =
+    | 'sources'
+    | 'sentiments'
+    | 'urgencies'
+    | 'issueTypes'
+    | 'owners'
+    | 'statuses';
+
+  const toggleFilterValue = (key: FilterListKey, value: string) => {
+    setFilters((prev) => {
+      const list = new Set(prev[key] as string[]);
+      if (list.has(value)) {
+        list.delete(value);
+      } else {
+        list.add(value);
+      }
+      const next = { ...prev, [key]: Array.from(list) };
+      if (key === 'urgencies' && prev.urgencyHighPlus) {
+        next.urgencyHighPlus = false;
+      }
+      return next;
+    });
+  };
+
+  const toggleUrgencyHighPlus = () => {
+    setFilters((prev) => ({ ...prev, urgencyHighPlus: !prev.urgencyHighPlus }));
+  };
+
+  const updateTimePreset = (value: TableFilters['timePreset']) => {
+    setFilters((prev) => {
+      if (value !== 'custom') {
+        return { ...prev, timePreset: value, startDate: null, endDate: null };
+      }
+      if (prev.startDate && prev.endDate) {
+        return { ...prev, timePreset: value };
+      }
+      const now = new Date();
+      const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+        now.getDate()
+      ).padStart(2, '0')}`;
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(
+        start.getDate()
+      ).padStart(2, '0')}`;
+      return { ...prev, timePreset: value, startDate, endDate };
+    });
+  };
+
+  const updateCustomDate = (key: 'startDate' | 'endDate', value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      timePreset: 'custom',
+      [key]: value || null,
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters(baseDefaultFilters);
+    setSearchInput(baseDefaultFilters.search);
+  };
+
   useEffect(() => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
   }, [totalPages]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterIssueType, sortKey]);
+  }, [filters, sortKey]);
 
   return (
     <div className="glass rounded-xl overflow-hidden shadow-card opacity-0 animate-slide-up stagger-3">
       <div className="px-4 py-2 border-b border-border/50">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
-          <div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="min-w-[180px]">
             <h3 className="text-lg font-semibold">View Tickets</h3>
+            <p className="text-xs text-muted-foreground">
+              Showing {filteredCount} of {totalCount}
+            </p>
           </div>
-          <div className="flex justify-center px-2">
+          <div className="flex flex-1 justify-center px-2 min-w-[240px]">
             <div className="w-full max-w-[520px]">
               <Input
-                placeholder="Search by ticket name..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search in table..."
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 className="h-9 bg-muted/70 border-border/70 focus:border-primary text-sm font-medium"
               />
             </div>
@@ -144,19 +495,134 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <div className="flex items-center justify-end gap-3">
             <div className="flex flex-col items-start gap-1">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Filter by</span>
-              <Select value={filterIssueType} onValueChange={(value) => setFilterIssueType(value)}>
-                <SelectTrigger className="h-9 w-[160px]">
-                  <SelectValue placeholder="Issue type" />
-                </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All issue types</SelectItem>
-                {Object.keys(issueTypeConfig).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {issueTypeConfig[key as keyof typeof issueTypeConfig]?.label ?? key}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" className="h-9 px-3 text-xs">
+                    <FilterIcon className="mr-2 h-3.5 w-3.5" />
+                    {filterSummary}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[280px]">
+                  <DropdownMenuLabel>Source</DropdownMenuLabel>
+                  {SOURCE_OPTIONS.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.sources.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('sources', option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Sentiment</DropdownMenuLabel>
+                  {SENTIMENT_OPTIONS.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.sentiments.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('sentiments', option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Urgency</DropdownMenuLabel>
+                  <DropdownMenuCheckboxItem
+                    checked={filters.urgencyHighPlus}
+                    onCheckedChange={toggleUrgencyHighPlus}
+                  >
+                    &gt;= High
+                  </DropdownMenuCheckboxItem>
+                  {URGENCY_OPTIONS.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.urgencies.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('urgencies', option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Issue Type</DropdownMenuLabel>
+                  {ISSUE_TYPE_OPTIONS.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.issueTypes.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('issueTypes', option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  {otherIssueTypes.length > 0 && (
+                    <>
+                      <DropdownMenuLabel>Other</DropdownMenuLabel>
+                      {otherIssueTypes.map((value) => (
+                        <DropdownMenuCheckboxItem
+                          key={value}
+                          checked={filters.issueTypes.includes(value)}
+                          onCheckedChange={() => toggleFilterValue('issueTypes', value)}
+                        >
+                          {formatFilterLabel(value)}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Owner</DropdownMenuLabel>
+                  {ownerOptions.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.owners.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('owners', option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Status</DropdownMenuLabel>
+                  {statusOptions.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.statuses.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('statuses', option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Time</DropdownMenuLabel>
+                  {TIME_PRESETS.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.timePreset === option.value}
+                      onCheckedChange={() => updateTimePreset(option.value)}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  {filters.timePreset === 'custom' && (
+                    <div className="p-2 space-y-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Start</label>
+                        <Input
+                          type="date"
+                          value={filters.startDate ?? ''}
+                          onChange={(event) => updateCustomDate('startDate', event.target.value)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">End</label>
+                        <Input
+                          type="date"
+                          value={filters.endDate ?? ''}
+                          onChange={(event) => updateCustomDate('endDate', event.target.value)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="flex flex-col items-start gap-1">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Sort by</span>
@@ -186,21 +652,15 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                       'Time',
                       'Status',
                     ];
-                    const ownerFor = (issueType?: string) =>
-                      issueType === 'performance' || issueType === 'bug'
-                        ? 'Engineering'
-                        : issueType === 'ux' || issueType === 'feature' || issueType === 'documentation'
-                        ? 'Product'
-                        : 'Support';
                     const rows = sortedFeedback.map((item) => [
                       item.source,
                       item.title,
                       item.sentiment,
                       item.urgency,
                       issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
-                      ownerFor(item.issueType),
+                      formatFilterLabel(normalizeOwner(item)),
                       item.timestamp?.toISOString?.() ?? '',
-                      item.resolved ? 'Resolved' : 'Open',
+                      formatFilterLabel(normalizeStatus(item)),
                     ]);
                     const csv = [headers, ...rows]
                       .map((row) =>
@@ -226,6 +686,52 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
             </div>
           </div>
         </div>
+        {(chips.length > 0 || !isDefaultFilters) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {chips.map((chip) => (
+              <span
+                key={chip.key}
+                className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-xs text-foreground"
+              >
+                {chip.label}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (chip.key === 'sources') setFilters((prev) => ({ ...prev, sources: [] }));
+                    if (chip.key === 'sentiments') setFilters((prev) => ({ ...prev, sentiments: [] }));
+                    if (chip.key === 'urgency_high')
+                      setFilters((prev) => ({ ...prev, urgencyHighPlus: false }));
+                    if (chip.key === 'urgencies') setFilters((prev) => ({ ...prev, urgencies: [] }));
+                    if (chip.key === 'issueTypes') setFilters((prev) => ({ ...prev, issueTypes: [] }));
+                    if (chip.key === 'owners') setFilters((prev) => ({ ...prev, owners: [] }));
+                    if (chip.key === 'statuses')
+                      setFilters((prev) => ({ ...prev, statuses: baseDefaultFilters.statuses }));
+                    if (chip.key === 'time')
+                      setFilters((prev) => ({
+                        ...prev,
+                        timePreset: baseDefaultFilters.timePreset,
+                        startDate: baseDefaultFilters.startDate,
+                        endDate: baseDefaultFilters.endDate,
+                      }));
+                    if (chip.key === 'search') {
+                      setSearchInput('');
+                      setFilters((prev) => ({ ...prev, search: '' }));
+                    }
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label={`Remove ${chip.label}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {!isDefaultFilters && (
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
+                Clear all
+              </Button>
+            )}
+          </div>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full table-fixed">
@@ -249,12 +755,8 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
               const urgencyConf = urgencyConfig[item.urgency];
               const issueTypeConf =
                 issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
-              const ownerLabel =
-                item.issueType === 'performance' || item.issueType === 'bug'
-                  ? 'Engineering'
-                  : item.issueType === 'ux' || item.issueType === 'feature' || item.issueType === 'documentation'
-                  ? 'Product'
-                  : 'Support';
+              const ownerLabel = formatFilterLabel(normalizeOwner(item));
+              const statusLabel = formatFilterLabel(normalizeStatus(item));
 
               return (
                 <tr
@@ -307,11 +809,14 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {item.resolved ? (
-                      <CheckCircle2 className="h-5 w-5 text-success" />
-                    ) : (
-                      <div className="h-2 w-2 rounded-full bg-warning animate-pulse" />
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.resolved ? (
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                      ) : (
+                        <div className="h-2 w-2 rounded-full bg-warning animate-pulse" />
+                      )}
+                      <span className="text-xs text-muted-foreground truncate">{statusLabel}</span>
+                    </div>
                   </td>
                 </tr>
               );
