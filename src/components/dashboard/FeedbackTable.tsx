@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { FeedbackItem, sourceConfig, sentimentConfig, urgencyConfig, issueTypeConfig } from '@/data/mockFeedback';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,6 +27,7 @@ import {
   Calendar as CalendarIcon,
   CheckCircle2,
   Check,
+  ExternalLink,
   Filter as FilterIcon,
   Github,
   Headphones,
@@ -115,7 +116,8 @@ const TIME_PRESETS = [
   { value: 'custom' as const, label: 'Custom range' },
 ];
 const SORT_OPTIONS = [
-  { value: 'time', label: 'Time' },
+  { value: 'priority', label: 'Priority (Recommended)' },
+  { value: 'time', label: 'Updated' },
   { value: 'urgency', label: 'Urgency' },
   { value: 'sentiment', label: 'Sentiment' },
 ];
@@ -165,7 +167,7 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
   const [draftFilters, setDraftFilters] = useState<TableFilters>(initialFilters);
   const [isFilterOpen, setIsFilterOpen] = useState<'icon' | 'plus' | null>(null);
   const [searchInput, setSearchInput] = useState(initialFilters.search);
-  const [sortKey, setSortKey] = useState<'time' | 'urgency' | 'sentiment'>('time');
+  const [sortKey, setSortKey] = useState<'priority' | 'time' | 'urgency' | 'sentiment'>('time');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [baseDefaultFilters, setBaseDefaultFilters] = useState<TableFilters>(() => ({
     ...DEFAULT_FILTERS,
@@ -293,6 +295,14 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     });
   }, [feedback, hasQueryParams, baseDefaultFilters.timePreset, baseDefaultFilters.startDate, baseDefaultFilters.endDate]);
 
+  const getUpdatedAtMs = useCallback((item: FeedbackItem) => {
+    const updated = item.updatedAt ? new Date(item.updatedAt).getTime() : NaN;
+    if (!Number.isNaN(updated)) return updated;
+    const created = item.createdAt ? new Date(item.createdAt).getTime() : NaN;
+    if (!Number.isNaN(created)) return created;
+    return item.timestamp?.getTime?.() ?? 0;
+  }, []);
+
   const sortedFeedback = useMemo(() => {
     const urgencyRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
     const sentimentRank: Record<string, number> = { negative: 3, neutral: 2, positive: 1 };
@@ -301,10 +311,8 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
       const aItem = a.item;
       const bItem = b.item;
       if (sortKey === 'time') {
-        const aTime = aItem.timestamp?.getTime?.() ?? 0;
-        const bTime = bItem.timestamp?.getTime?.() ?? 0;
-        const diff = sortDir === 'desc' ? bTime - aTime : aTime - bTime;
-        return diff !== 0 ? diff : a.index - b.index;
+        const diff = sortDir === 'desc' ? getUpdatedAtMs(bItem) - getUpdatedAtMs(aItem) : getUpdatedAtMs(aItem) - getUpdatedAtMs(bItem);
+        if (diff !== 0) return diff;
       }
       if (sortKey === 'urgency') {
         const diff =
@@ -318,13 +326,19 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
         const ordered = sortDir === 'desc' ? diff : -diff;
         if (ordered !== 0) return ordered;
       }
-      const aTime = aItem.timestamp?.getTime?.() ?? 0;
-      const bTime = bItem.timestamp?.getTime?.() ?? 0;
-      const timeDiff = bTime - aTime;
+      if (sortKey === 'priority') {
+        const aScore = aItem.priorityScore ?? 0;
+        const bScore = bItem.priorityScore ?? 0;
+        const diff = sortDir === 'desc' ? bScore - aScore : aScore - bScore;
+        if (diff !== 0) return diff;
+        const updatedDiff = getUpdatedAtMs(bItem) - getUpdatedAtMs(aItem);
+        if (updatedDiff !== 0) return updatedDiff;
+      }
+      const timeDiff = getUpdatedAtMs(bItem) - getUpdatedAtMs(aItem);
       return timeDiff !== 0 ? timeDiff : a.index - b.index;
     });
     return indexed.map((entry) => entry.item);
-  }, [filteredFeedback, sortKey, sortDir]);
+  }, [filteredFeedback, sortKey, sortDir, getUpdatedAtMs]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedback.length / pageSize));
   const pageNumbers = useMemo(
@@ -339,8 +353,28 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
 
   const totalCount = feedback.length;
   const filteredCount = filteredFeedback.length;
-  const sortLabel = SORT_OPTIONS.find((option) => option.value === sortKey)?.label ?? 'Sort';
+  const sortLabel =
+    sortKey === 'priority'
+      ? 'Priority'
+      : SORT_OPTIONS.find((option) => option.value === sortKey)?.label ?? 'Sort';
   const filterRowClass = "flex items-center gap-2 text-sm leading-none min-h-[28px]";
+  const toPriorityLabel = (score?: number) => {
+    const value = score ?? 0;
+    if (value >= 80) return 'P0';
+    if (value >= 60) return 'P1';
+    if (value >= 40) return 'P2';
+    return 'P3';
+  };
+  const priorityBadgeClass = (label: string) => {
+    if (label === 'P0') return 'border-red-500/40 bg-red-500/20 text-red-300';
+    if (label === 'P1') return 'border-orange-500/40 bg-orange-500/20 text-orange-300';
+    if (label === 'P2') return 'border-yellow-500/40 bg-yellow-500/20 text-yellow-200';
+    return 'border-border/60 bg-muted/40 text-muted-foreground';
+  };
+  const safeOpenExternal = (url?: string) => {
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
   const formatTime = (value: Date | null) => {
     if (!value) return '';
     const pad = (num: number) => String(num).padStart(2, '0');
@@ -1127,21 +1161,33 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     'Source',
                     'Description',
                     'Sentiment',
+                    'Priority',
                     'Urgency',
                     'Issue Type',
+                    'Product Area',
                     'Owner',
-                    'Time',
+                    'Updated',
                     'Status',
+                    'External Ref',
+                    'External Url',
+                    'Customer Segment',
+                    'Tags',
                   ];
                   const rows = sortedFeedback.map((item) => [
                     item.source,
                     item.title,
                     item.sentiment,
+                    item.priorityScore ?? '',
                     item.urgency,
                     issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
+                    item.productArea ?? 'other',
                     formatFilterLabel(normalizeOwner(item)),
-                    item.timestamp?.toISOString?.() ?? '',
+                    item.updatedAt ?? item.createdAt ?? '',
                     formatFilterLabel(normalizeStatus(item)),
+                    item.externalRef ?? '',
+                    item.externalUrl ?? '',
+                    item.customerSegment ?? '',
+                    item.tags?.join('|') ?? '',
                   ]);
                   const csv = [headers, ...rows]
                     .map((row) =>
@@ -1241,13 +1287,15 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
               <th className="w-[64px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Source</th>
-              <th className="w-[280px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
-              <th className="w-[100px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
-              <th className="w-[100px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Urgency</th>
+              <th className="w-[240px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
+              <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
+              <th className="w-[70px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Priority</th>
+              <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Urgency</th>
               <th className="w-[120px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Type</th>
               <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</th>
-              <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Time</th>
-              <th className="w-[80px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+              <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Updated</th>
+              <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+              <th className="w-[70px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Link/Ref</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/30">
@@ -1260,6 +1308,9 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                 issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
               const ownerLabel = formatFilterLabel(normalizeOwner(item));
               const statusLabel = formatFilterLabel(normalizeStatus(item));
+              const priorityLabel = toPriorityLabel(item.priorityScore);
+              const updatedAt = item.updatedAt ?? item.createdAt;
+              const updatedDate = updatedAt ? new Date(updatedAt) : null;
 
               return (
                 <tr
@@ -1282,6 +1333,15 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     <span className={cn("text-sm font-medium capitalize truncate", sentimentConf.color)}>
                       {item.sentiment}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant="outline"
+                      className={cn("text-xs", priorityBadgeClass(priorityLabel))}
+                      title={`Priority score: ${item.priorityScore ?? 0}`}
+                    >
+                      {priorityLabel}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <Badge 
@@ -1308,7 +1368,9 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground truncate">
-                      {formatDistanceToNow(item.timestamp, { addSuffix: true })}
+                      {updatedDate
+                        ? formatDistanceToNow(updatedDate, { addSuffix: true })
+                        : '—'}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -1320,6 +1382,24 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                       )}
                       <span className="text-xs text-muted-foreground truncate">{statusLabel}</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {item.externalUrl ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title={item.externalRef ?? 'Open source'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          safeOpenExternal(item.externalUrl);
+                        }}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               );
