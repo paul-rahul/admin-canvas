@@ -65,6 +65,9 @@ const sourceIcons: Record<string, React.ElementType> = {
 interface FeedbackTableProps {
   feedback: FeedbackItem[];
   onSelect?: (item: FeedbackItem) => void;
+  globalSource?: FeedbackSource | 'all';
+  globalTime?: '24h' | '7d' | '30d' | 'all' | 'custom';
+  globalCustomRange?: { from: Date | null; to: Date | null };
 }
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100];
@@ -96,12 +99,28 @@ const ISSUE_TYPE_OPTIONS = [
   { value: 'pricing', label: 'Pricing' },
   { value: 'documentation', label: 'Docs' },
 ];
+const PRODUCT_AREA_OPTIONS = [
+  { value: 'auth', label: 'Auth' },
+  { value: 'billing', label: 'Billing' },
+  { value: 'integrations', label: 'Integrations' },
+  { value: 'performance', label: 'Performance' },
+  { value: 'ui', label: 'UI' },
+  { value: 'notifications', label: 'Notifications' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'other', label: 'Other' },
+];
 const OWNER_OPTIONS = [
   { value: 'product', label: 'Product' },
   { value: 'engineering', label: 'Engineering' },
   { value: 'support', label: 'Support' },
   { value: 'design', label: 'Design' },
   { value: 'unassigned', label: 'Unassigned/Unknown' },
+];
+const SEGMENT_OPTIONS = [
+  { value: 'free', label: 'Free' },
+  { value: 'pro', label: 'Pro' },
+  { value: 'enterprise', label: 'Enterprise' },
+  { value: 'unknown', label: 'Unknown' },
 ];
 const STATUS_OPTIONS = [
   { value: 'unresolved', label: 'Unresolved' },
@@ -116,7 +135,6 @@ const TIME_PRESETS = [
   { value: 'custom' as const, label: 'Custom range' },
 ];
 const SORT_OPTIONS = [
-  { value: 'priority', label: 'Priority (Recommended)' },
   { value: 'time', label: 'Updated' },
   { value: 'urgency', label: 'Urgency' },
   { value: 'sentiment', label: 'Sentiment' },
@@ -127,8 +145,11 @@ const CLEAR_FILTERS: TableFilters = {
   urgencies: [],
   urgencyHighPlus: false,
   issueTypes: [],
+  productAreas: [],
   owners: [],
+  segments: [],
   statuses: [],
+  tags: [],
   timePreset: 'all',
   startDate: null,
   endDate: null,
@@ -158,7 +179,13 @@ const getPageNumbers = (current: number, total: number) => {
   return withEllipsis;
 };
 
-function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
+function FeedbackTableComponent({
+  feedback,
+  onSelect,
+  globalSource,
+  globalTime,
+  globalCustomRange,
+}: FeedbackTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const initialFilters = useMemo(() => parseFiltersFromSearch(window.location.search), []);
@@ -167,7 +194,8 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
   const [draftFilters, setDraftFilters] = useState<TableFilters>(initialFilters);
   const [isFilterOpen, setIsFilterOpen] = useState<'icon' | 'plus' | null>(null);
   const [searchInput, setSearchInput] = useState(initialFilters.search);
-  const [sortKey, setSortKey] = useState<'priority' | 'time' | 'urgency' | 'sentiment'>('time');
+  const [tagSearch, setTagSearch] = useState('');
+  const [sortKey, setSortKey] = useState<'time' | 'urgency' | 'sentiment'>('time');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [baseDefaultFilters, setBaseDefaultFilters] = useState<TableFilters>(() => ({
     ...DEFAULT_FILTERS,
@@ -175,7 +203,15 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     startDate: initialFilters.startDate,
     endDate: initialFilters.endDate,
   }));
-  const appliedDefaultFilters = CLEAR_FILTERS;
+  const appliedDefaultFilters = useMemo(
+    () => ({
+      ...DEFAULT_FILTERS,
+      timePreset: baseDefaultFilters.timePreset,
+      startDate: baseDefaultFilters.startDate,
+      endDate: baseDefaultFilters.endDate,
+    }),
+    [baseDefaultFilters.timePreset, baseDefaultFilters.startDate, baseDefaultFilters.endDate]
+  );
 
   const otherIssueTypes = useMemo(() => {
     const known = new Set(ISSUE_TYPE_OPTIONS.map((option) => option.value));
@@ -203,6 +239,45 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
       (option) => present.has(option.value) || DEFAULT_STATUSES.includes(option.value)
     );
   }, [feedback]);
+
+  const productAreaOptions = useMemo(() => {
+    const present = new Set<string>();
+    feedback.forEach((item) => {
+      present.add((item.productArea ?? 'other').toLowerCase());
+    });
+    return PRODUCT_AREA_OPTIONS.filter(
+      (option) => present.has(option.value) || option.value === 'other'
+    );
+  }, [feedback]);
+
+  const segmentOptions = useMemo(() => {
+    const present = new Set<string>();
+    feedback.forEach((item) => {
+      present.add((item.customerSegment ?? 'unknown').toLowerCase());
+    });
+    return SEGMENT_OPTIONS.filter(
+      (option) => present.has(option.value) || option.value === 'unknown'
+    );
+  }, [feedback]);
+
+  const tagOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    feedback.forEach((item) => {
+      (item.tags ?? []).forEach((tag) => {
+        const key = tag.toLowerCase();
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      });
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag);
+  }, [feedback]);
+
+  const filteredTags = useMemo(() => {
+    const query = tagSearch.trim().toLowerCase();
+    if (!query) return tagOptions;
+    return tagOptions.filter((tag) => tag.includes(query));
+  }, [tagOptions, tagSearch]);
 
   const otherSources = useMemo(() => {
     const known = new Set(SOURCE_OPTIONS.map((option) => option.value).filter((value) => value !== 'other'));
@@ -353,24 +428,8 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
 
   const totalCount = feedback.length;
   const filteredCount = filteredFeedback.length;
-  const sortLabel =
-    sortKey === 'priority'
-      ? 'Priority'
-      : SORT_OPTIONS.find((option) => option.value === sortKey)?.label ?? 'Sort';
+  const sortLabel = SORT_OPTIONS.find((option) => option.value === sortKey)?.label ?? 'Sort';
   const filterRowClass = "flex items-center gap-2 text-sm leading-none min-h-[28px]";
-  const toPriorityLabel = (score?: number) => {
-    const value = score ?? 0;
-    if (value >= 80) return 'P0';
-    if (value >= 60) return 'P1';
-    if (value >= 40) return 'P2';
-    return 'P3';
-  };
-  const priorityBadgeClass = (label: string) => {
-    if (label === 'P0') return 'border-red-500/40 bg-red-500/20 text-red-300';
-    if (label === 'P1') return 'border-orange-500/40 bg-orange-500/20 text-orange-300';
-    if (label === 'P2') return 'border-yellow-500/40 bg-yellow-500/20 text-yellow-200';
-    return 'border-border/60 bg-muted/40 text-muted-foreground';
-  };
   const safeOpenExternal = (url?: string) => {
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -398,10 +457,36 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     return parsed;
   };
 
-  const toDateTimeString = (value: Date | null) =>
-    value ? format(value, "yyyy-MM-dd'T'HH:mm") : null;
+  const toDateTimeString = useCallback(
+    (value: Date | null) => (value ? format(value, "yyyy-MM-dd'T'HH:mm") : null),
+    []
+  );
   const customFrom = parseDateTimeValue(draftFilters.startDate);
   const customTo = parseDateTimeValue(draftFilters.endDate);
+
+  useEffect(() => {
+    if (!globalTime && !globalSource) return;
+    const nextSources = globalSource && globalSource !== 'all' ? [globalSource] : [];
+    const nextTimePreset = globalTime ?? null;
+    const nextStart =
+      globalTime === 'custom' ? toDateTimeString(globalCustomRange?.from ?? null) : null;
+    const nextEnd =
+      globalTime === 'custom' ? toDateTimeString(globalCustomRange?.to ?? null) : null;
+    setFilters((prev) => ({
+      ...prev,
+      sources: nextSources,
+      timePreset: (nextTimePreset ?? prev.timePreset) as TableFilters['timePreset'],
+      startDate: nextStart,
+      endDate: nextEnd,
+    }));
+    setDraftFilters((prev) => ({
+      ...prev,
+      sources: nextSources,
+      timePreset: (nextTimePreset ?? prev.timePreset) as TableFilters['timePreset'],
+      startDate: nextStart,
+      endDate: nextEnd,
+    }));
+  }, [globalSource, globalTime, globalCustomRange, toDateTimeString]);
 
   const isSameList = (a: string[], b: string[]) => {
     if (a.length !== b.length) return false;
@@ -416,8 +501,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     isSameList(filters.urgencies, appliedDefaultFilters.urgencies) &&
     filters.urgencyHighPlus === appliedDefaultFilters.urgencyHighPlus &&
     isSameList(filters.issueTypes, appliedDefaultFilters.issueTypes) &&
+    isSameList(filters.productAreas, appliedDefaultFilters.productAreas) &&
     isSameList(filters.owners, appliedDefaultFilters.owners) &&
+    isSameList(filters.segments, appliedDefaultFilters.segments) &&
     isSameList(filters.statuses, appliedDefaultFilters.statuses) &&
+    isSameList(filters.tags, appliedDefaultFilters.tags) &&
     filters.timePreset === appliedDefaultFilters.timePreset &&
     filters.startDate === appliedDefaultFilters.startDate &&
     filters.endDate === appliedDefaultFilters.endDate &&
@@ -428,8 +516,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     filters.sentiments.length ? 'Sentiment' : null,
     filters.urgencyHighPlus || filters.urgencies.length ? 'Urgency' : null,
     filters.issueTypes.length ? 'Issue Type' : null,
+    filters.productAreas.length ? 'Product Area' : null,
     filters.owners.length ? 'Owner' : null,
+    filters.segments.length ? 'Segment' : null,
     filters.statuses.length ? 'Status' : null,
+    filters.tags.length ? 'Tags' : null,
     filters.timePreset !== 'all' || filters.startDate || filters.endDate
       ? 'Time'
       : null,
@@ -452,6 +543,21 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     ...ISSUE_TYPE_OPTIONS.map((option) => option.value),
     ...otherIssueTypes,
   ];
+  const allProductAreas = productAreaOptions.map((option) => option.value);
+  const allSegments = segmentOptions.map((option) => option.value);
+  const allTags = tagOptions;
+
+  const selectionSummary = (
+    selected: string[],
+    allOptions: string[],
+    formatValue: (value: string) => string,
+    forceCount = false
+  ) => {
+    if (!selected.length || allSelected(selected, allOptions)) return 'All';
+    if (forceCount) return String(selected.length);
+    if (selected.length === 1) return formatValue(selected[0]);
+    return String(selected.length);
+  };
 
   const chips = [];
   if (filters.sources.length) {
@@ -508,6 +614,18 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           .join(', ');
     chips.push({ key: 'issueTypes', label: `Issue Type: ${label}` });
   }
+  if (filters.productAreas.length) {
+    const label = allSelected(filters.productAreas, allProductAreas)
+      ? 'All'
+      : filters.productAreas
+          .map(
+            (value) =>
+              PRODUCT_AREA_OPTIONS.find((option) => option.value === value)?.label ??
+              formatFilterLabel(value)
+          )
+          .join(', ');
+    chips.push({ key: 'productAreas', label: `Product Area: ${label}` });
+  }
   if (filters.owners.length) {
     const label = allSelected(
       filters.owners,
@@ -518,6 +636,18 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           .map((value) => OWNER_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
           .join(', ');
     chips.push({ key: 'owners', label: `Owner: ${label}` });
+  }
+  if (filters.segments.length) {
+    const label = allSelected(filters.segments, allSegments)
+      ? 'All'
+      : filters.segments
+          .map(
+            (value) =>
+              SEGMENT_OPTIONS.find((option) => option.value === value)?.label ??
+              formatFilterLabel(value)
+          )
+          .join(', ');
+    chips.push({ key: 'segments', label: `Segment: ${label}` });
   }
   if (filters.statuses.length) {
     const label = allSelected(
@@ -532,6 +662,12 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           )
           .join(', ');
     chips.push({ key: 'statuses', label: `Status: ${label}` });
+  }
+  if (filters.tags.length) {
+    const label = allSelected(filters.tags, allTags)
+      ? 'All'
+      : filters.tags.map((value) => formatFilterLabel(value)).join(', ');
+    chips.push({ key: 'tags', label: `Issue Type: ${label}` });
   }
   if (filters.timePreset !== 'all' || filters.startDate || filters.endDate) {
     const timeLabel =
@@ -549,8 +685,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     | 'sentiments'
     | 'urgencies'
     | 'issueTypes'
+    | 'productAreas'
     | 'owners'
-    | 'statuses';
+    | 'segments'
+    | 'statuses'
+    | 'tags';
 
   const toggleFilterValue = (key: FilterListKey, value: string) => {
     setDraftFilters((prev) => {
@@ -596,14 +735,37 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     }));
   };
 
-  const selectAllOptions = (key: 'sources' | 'sentiments' | 'urgencies' | 'issueTypes' | 'owners' | 'statuses', values: string[]) => {
+  const selectAllOptions = (
+    key:
+      | 'sources'
+      | 'sentiments'
+      | 'urgencies'
+      | 'issueTypes'
+      | 'productAreas'
+      | 'owners'
+      | 'segments'
+      | 'statuses'
+      | 'tags',
+    values: string[]
+  ) => {
     setDraftFilters((prev) => ({
       ...prev,
       [key]: values,
     }));
   };
 
-  const clearAllOptions = (key: 'sources' | 'sentiments' | 'urgencies' | 'issueTypes' | 'owners' | 'statuses') => {
+  const clearAllOptions = (
+    key:
+      | 'sources'
+      | 'sentiments'
+      | 'urgencies'
+      | 'issueTypes'
+      | 'productAreas'
+      | 'owners'
+      | 'segments'
+      | 'statuses'
+      | 'tags'
+  ) => {
     setDraftFilters((prev) => ({
       ...prev,
       [key]: [],
@@ -650,7 +812,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Source</span>
             <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.sources.length || 'All'}
+              {selectionSummary(
+                draftFilters.sources,
+                allSources,
+                (value) => SOURCE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-2">
@@ -691,7 +857,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Sentiment</span>
             <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.sentiments.length || 'All'}
+              {selectionSummary(
+                draftFilters.sentiments,
+                SENTIMENT_OPTIONS.map((option) => option.value),
+                (value) => SENTIMENT_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-2">
@@ -732,7 +902,13 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Urgency</span>
             <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.urgencyHighPlus ? 'High+' : draftFilters.urgencies.length || 'All'}
+              {draftFilters.urgencyHighPlus
+                ? 'High+'
+                : selectionSummary(
+                    draftFilters.urgencies,
+                    URGENCY_OPTIONS.map((option) => option.value),
+                    (value) => URGENCY_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+                  )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-2">
@@ -790,7 +966,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Issue Type</span>
             <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.issueTypes.length || 'All'}
+              {selectionSummary(
+                draftFilters.issueTypes,
+                allIssueTypes,
+                (value) => ISSUE_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-2">
@@ -846,11 +1026,62 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
             </div>
           </AccordionContent>
         </AccordionItem>
+        <AccordionItem value="productArea" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Product Area</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {selectionSummary(
+                draftFilters.productAreas,
+                allProductAreas,
+                (value) =>
+                  PRODUCT_AREA_OPTIONS.find((option) => option.value === value)?.label ??
+                  formatFilterLabel(value)
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {productAreaOptions.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.productAreas.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('productAreas', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('productAreas', productAreaOptions.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('productAreas')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
         <AccordionItem value="owner" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Owner</span>
             <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.owners.length || 'All'}
+              {selectionSummary(
+                draftFilters.owners,
+                ownerOptions.map((option) => option.value),
+                (value) => OWNER_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-2">
@@ -887,11 +1118,60 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
             </div>
           </AccordionContent>
         </AccordionItem>
+        <AccordionItem value="segment" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Segment</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {selectionSummary(
+                draftFilters.segments,
+                allSegments,
+                (value) => SEGMENT_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {segmentOptions.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.segments.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('segments', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('segments', segmentOptions.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('segments')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
         <AccordionItem value="status" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Status</span>
             <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.statuses.length || 'All'}
+              {selectionSummary(
+                draftFilters.statuses,
+                statusOptions.map((option) => option.value),
+                (value) => STATUS_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-2">
@@ -920,6 +1200,53 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                 <button
                   type="button"
                   onClick={() => clearAllOptions('statuses')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="tags" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Issue Type</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {selectionSummary(draftFilters.tags, allTags, (value) => value, true)}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                <Input
+                  placeholder="Search tags..."
+                  value={tagSearch}
+                  onChange={(event) => setTagSearch(event.target.value)}
+                  className="h-8 bg-muted/60 border-border/70 text-xs"
+                />
+                <div className="max-h-[180px] space-y-2 overflow-y-auto pr-1">
+                  {filteredTags.map((tag) => (
+                    <label key={tag} className={filterRowClass}>
+                      <Checkbox
+                        checked={draftFilters.tags.includes(tag)}
+                        onCheckedChange={() => toggleFilterValue('tags', tag)}
+                      />
+                      <span className="capitalize">{tag}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => selectAllOptions('tags', allTags)}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('tags')}
                   className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
                 >
                   Clear all
@@ -1161,7 +1488,6 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     'Source',
                     'Description',
                     'Sentiment',
-                    'Priority',
                     'Urgency',
                     'Issue Type',
                     'Product Area',
@@ -1177,7 +1503,6 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     item.source,
                     item.title,
                     item.sentiment,
-                    item.priorityScore ?? '',
                     item.urgency,
                     issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
                     item.productArea ?? 'other',
@@ -1229,9 +1554,12 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                       setFilters((prev) => ({ ...prev, urgencyHighPlus: false }));
                     if (chip.key === 'urgencies') setFilters((prev) => ({ ...prev, urgencies: [] }));
                     if (chip.key === 'issueTypes') setFilters((prev) => ({ ...prev, issueTypes: [] }));
+                    if (chip.key === 'productAreas') setFilters((prev) => ({ ...prev, productAreas: [] }));
                     if (chip.key === 'owners') setFilters((prev) => ({ ...prev, owners: [] }));
+                    if (chip.key === 'segments') setFilters((prev) => ({ ...prev, segments: [] }));
                     if (chip.key === 'statuses')
                       setFilters((prev) => ({ ...prev, statuses: [] }));
+                    if (chip.key === 'tags') setFilters((prev) => ({ ...prev, tags: [] }));
                     if (chip.key === 'time')
                       setFilters((prev) => ({
                         ...prev,
@@ -1251,7 +1579,7 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                 </button>
               </span>
             ))}
-            {!isDefaultFilters && (
+            {chips.length > 0 && (
               <div className="flex items-center gap-2">
                 <Popover
                   open={isFilterOpen === 'plus'}
@@ -1289,7 +1617,6 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
               <th className="w-[64px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Source</th>
               <th className="w-[240px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
               <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
-              <th className="w-[70px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Priority</th>
               <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Urgency</th>
               <th className="w-[120px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Type</th>
               <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</th>
@@ -1308,7 +1635,6 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                 issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
               const ownerLabel = formatFilterLabel(normalizeOwner(item));
               const statusLabel = formatFilterLabel(normalizeStatus(item));
-              const priorityLabel = toPriorityLabel(item.priorityScore);
               const updatedAt = item.updatedAt ?? item.createdAt;
               const updatedDate = updatedAt ? new Date(updatedAt) : null;
 
@@ -1333,15 +1659,6 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     <span className={cn("text-sm font-medium capitalize truncate", sentimentConf.color)}>
                       {item.sentiment}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant="outline"
-                      className={cn("text-xs", priorityBadgeClass(priorityLabel))}
-                      title={`Priority score: ${item.priorityScore ?? 0}`}
-                    >
-                      {priorityLabel}
-                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <Badge 

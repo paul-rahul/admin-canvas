@@ -1,6 +1,6 @@
 import type { FeedbackItem } from '@/data/mockFeedback';
 
-export type TimePreset = '24h' | '7d' | '30d' | 'custom';
+export type TimePreset = '24h' | '7d' | '30d' | 'custom' | 'all';
 
 export type TableFilters = {
   sources: string[];
@@ -8,8 +8,11 @@ export type TableFilters = {
   urgencies: string[];
   urgencyHighPlus: boolean;
   issueTypes: string[];
+  productAreas: string[];
   owners: string[];
+  segments: string[];
   statuses: string[];
+  tags: string[];
   timePreset: TimePreset;
   startDate: string | null;
   endDate: string | null;
@@ -24,8 +27,11 @@ export const DEFAULT_FILTERS: TableFilters = {
   urgencies: [],
   urgencyHighPlus: false,
   issueTypes: [],
+  productAreas: [],
   owners: [],
+  segments: [],
   statuses: DEFAULT_STATUSES,
+  tags: [],
   timePreset: '7d',
   startDate: null,
   endDate: null,
@@ -98,8 +104,11 @@ export const parseFiltersFromSearch = (search: string) => {
   const sentiments = parseListParam(params.get('sentiment'));
   const urgencies = parseListParam(params.get('urgency'));
   const issueTypes = parseListParam(params.get('issueTypes'));
+  const productAreas = parseListParam(params.get('productAreas'));
   const owners = parseListParam(params.get('owners'));
+  const segments = parseListParam(params.get('segments'));
   const statuses = parseListParam(params.get('status'));
+  const tags = parseListParam(params.get('tags'));
   const startDate = params.get('start');
   const endDate = params.get('end');
   const searchText = params.get('q') ?? '';
@@ -109,8 +118,11 @@ export const parseFiltersFromSearch = (search: string) => {
     sentiments,
     urgencies,
     issueTypes,
+    productAreas,
     owners,
+    segments,
     statuses: statuses.length ? statuses : DEFAULT_STATUSES,
+    tags,
     startDate: startDate || null,
     endDate: endDate || null,
     search: searchText,
@@ -142,12 +154,15 @@ export const serializeFiltersToSearch = (filters: TableFilters, now = new Date()
     pushList('urgency', filters.urgencies);
   }
   pushList('issueTypes', filters.issueTypes);
+  pushList('productAreas', filters.productAreas);
   pushList('owners', filters.owners);
+  pushList('segments', filters.segments);
   if (filters.statuses.length && sortedStatuses.join(',') !== defaultStatuses.join(',')) {
     params.set('status', filters.statuses.join(','));
   }
+  pushList('tags', filters.tags);
   const hasCustomDates = Boolean(filters.startDate || filters.endDate);
-  if (filters.timePreset !== 'custom' && !hasCustomDates && filters.timePreset !== '7d') {
+  if (filters.timePreset !== 'custom' && filters.timePreset !== 'all' && !hasCustomDates && filters.timePreset !== '7d') {
     const end = now;
     const start =
       filters.timePreset === '24h'
@@ -186,6 +201,9 @@ const tokenizeSearch = (input: string) => {
 };
 
 const resolveTimeWindow = (filters: TableFilters, nowMs: number) => {
+  if (filters.timePreset === 'all') {
+    return { startMs: null, endMs: null };
+  }
   if (filters.timePreset === 'custom') {
     const startMs = filters.startDate ? parseStartValue(filters.startDate) : null;
     const endMs = filters.endDate ? parseEndValue(filters.endDate) : null;
@@ -215,12 +233,21 @@ export const applyFilters = (entries: FeedbackItem[], filters: TableFilters, now
     if (filters.sentiments.length && !filters.sentiments.includes(item.sentiment)) return false;
     if (effectiveUrgencies.length && !effectiveUrgencies.includes(item.urgency)) return false;
     if (filters.issueTypes.length && !filters.issueTypes.includes(item.issueType)) return false;
+    const productArea = (item.productArea ?? 'other').toLowerCase();
+    if (filters.productAreas.length && !filters.productAreas.includes(productArea)) return false;
     const owner = normalizeOwner(item);
     if (filters.owners.length && !filters.owners.includes(owner)) return false;
+    const segment = (item.customerSegment ?? 'unknown').toLowerCase();
+    if (filters.segments.length && !filters.segments.includes(segment)) return false;
     const statusValue = normalizeStatus(item);
     if (filters.statuses.length && !filters.statuses.includes(statusValue)) return false;
+    if (filters.tags.length) {
+      const tags = (item.tags ?? []).map((tag) => tag.toLowerCase());
+      if (!filters.tags.some((tag) => tags.includes(tag))) return false;
+    }
     if (startMs !== null || endMs !== null) {
-      const timestamp = item.timestamp?.getTime?.() ?? null;
+      const updatedAt = item.updatedAt ?? item.createdAt;
+      const timestamp = updatedAt ? new Date(updatedAt).getTime() : item.timestamp?.getTime?.() ?? null;
       if (timestamp === null) return false;
       if (startMs !== null && timestamp < startMs) return false;
       if (endMs !== null && timestamp > endMs) return false;

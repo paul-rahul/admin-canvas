@@ -235,19 +235,13 @@ const deriveProductArea = (issueType: IssueType, tags: string[]) => {
     return 'performance';
   }
   if (issueType === 'ux' || tagSet.has('dashboard') || tagSet.has('search') || tagSet.has('filter') || tagSet.has('export') || tagSet.has('csv')) {
-    return 'experience';
+    return 'ui';
   }
   if (tagSet.has('notification') || tagSet.has('email')) {
     return 'notifications';
   }
   if (issueType === 'documentation' || tagSet.has('docs')) {
-    return 'docs';
-  }
-  if (issueType === 'feature' || issueType === 'bug') {
-    return 'core';
-  }
-  if (issueType === 'reliability') {
-    return 'reliability';
+    return 'admin';
   }
   return 'other';
 };
