@@ -21,7 +21,6 @@ const makeEntry = (overrides: Partial<FeedbackItem>): FeedbackItem => ({
   createdAt: overrides.createdAt ?? '2024-01-10T00:00:00.000Z',
   updatedAt: overrides.updatedAt ?? '2024-01-11T00:00:00.000Z',
   tags: overrides.tags ?? ['login'],
-  productArea: overrides.productArea ?? 'auth',
   customerSegment: overrides.customerSegment ?? 'free',
   priorityScore: overrides.priorityScore ?? 42,
   externalRef: overrides.externalRef,
@@ -99,14 +98,14 @@ describe('applyFilters', () => {
     expect(filtered.map((item) => item.id)).toEqual(['b']);
   });
 
-  it('segment and product area filters apply with fallbacks', () => {
+  it('segment filters apply with fallbacks', () => {
     const entries = [
-      makeEntry({ id: 'a', productArea: 'billing', customerSegment: 'enterprise' }),
-      makeEntry({ id: 'b', productArea: 'other', customerSegment: 'unknown' }),
+      makeEntry({ id: 'a', customerSegment: 'enterprise' }),
+      makeEntry({ id: 'b', customerSegment: 'unknown' }),
     ];
     const filtered = applyFilters(
       entries,
-      { ...DEFAULT_FILTERS, productAreas: ['billing'], segments: ['enterprise'] },
+      { ...DEFAULT_FILTERS, segments: ['enterprise'] },
       new Date('2024-01-12T00:00:00Z').getTime()
     );
     expect(filtered.map((item) => item.id)).toEqual(['a']);
@@ -117,7 +116,7 @@ describe('applyFilters', () => {
 describe('URL filter parsing', () => {
   it('round-trips query params', () => {
     const query =
-      'sources=Email,GitHub&sentiment=Negative&urgency=Critical,High&issueTypes=Bug&productAreas=auth&owners=Engineering&segments=Enterprise&status=Unresolved,InProgress&tags=login,android&start=2024-01-01&end=2024-01-07&q=login';
+      'sources=Email,GitHub&sentiment=Negative&urgency=Critical,High&issueTypes=Bug&owners=Engineering&segments=Enterprise&status=Unresolved,InProgress&tags=login,android&start=2024-01-01&end=2024-01-07&q=login';
     const parsed = parseFiltersFromSearch(`?${query}`);
     const serialized = serializeFiltersToSearch(parsed, new Date('2024-01-07T12:00:00Z'));
     const reparsed = parseFiltersFromSearch(`?${serialized}`);
@@ -125,7 +124,6 @@ describe('URL filter parsing', () => {
     expect(reparsed.sentiments.sort()).toEqual(parsed.sentiments.sort());
     expect(reparsed.urgencies.sort()).toEqual(parsed.urgencies.sort());
     expect(reparsed.issueTypes.sort()).toEqual(parsed.issueTypes.sort());
-    expect(reparsed.productAreas.sort()).toEqual(parsed.productAreas.sort());
     expect(reparsed.owners.sort()).toEqual(parsed.owners.sort());
     expect(reparsed.segments.sort()).toEqual(parsed.segments.sort());
     expect(reparsed.statuses.sort()).toEqual(parsed.statuses.sort());

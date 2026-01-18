@@ -45,7 +45,6 @@ export interface TicketRecord {
   createdAt: string;
   updatedAt: string;
   tags: string[];
-  productArea: string;
   customerSegment: CustomerSegment;
   priorityScore: number;
   externalRef?: string;
@@ -220,32 +219,6 @@ const extractTags = (text: string, issueType: IssueType) => {
   return Array.from(tags);
 };
 
-const deriveProductArea = (issueType: IssueType, tags: string[]) => {
-  const tagSet = new Set(tags);
-  if (issueType === 'account_access' || tagSet.has('login') || tagSet.has('sso') || tagSet.has('oauth') || tagSet.has('access')) {
-    return 'auth';
-  }
-  if (issueType === 'billing' || issueType === 'pricing' || tagSet.has('billing') || tagSet.has('payment') || tagSet.has('invoice')) {
-    return 'billing';
-  }
-  if (issueType === 'integration' || tagSet.has('integration') || tagSet.has('api') || tagSet.has('webhook')) {
-    return 'integrations';
-  }
-  if (issueType === 'performance' || tagSet.has('latency') || tagSet.has('timeout') || tagSet.has('slow')) {
-    return 'performance';
-  }
-  if (issueType === 'ux' || tagSet.has('dashboard') || tagSet.has('search') || tagSet.has('filter') || tagSet.has('export') || tagSet.has('csv')) {
-    return 'ui';
-  }
-  if (tagSet.has('notification') || tagSet.has('email')) {
-    return 'notifications';
-  }
-  if (issueType === 'documentation' || tagSet.has('docs')) {
-    return 'admin';
-  }
-  return 'other';
-};
-
 const weightedPick = <T,>(rng: () => number, entries: Array<{ value: T; weight: number }>) => {
   const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
   let roll = rng() * total;
@@ -405,7 +378,6 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
   const tagSet = new Set(extractTags(baseText, old.issueType));
   (options?.forcedTags ?? []).forEach((tag) => tagSet.add(tag));
   const tags = Array.from(tagSet);
-  const productArea = deriveProductArea(old.issueType, tags);
   const customerSegment = pickCustomerSegment(rng, old.source, old.urgency);
   const priorityScore = computePriorityScore(
     old.urgency,
@@ -432,7 +404,6 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
     createdAt: new Date(createdAtMs).toISOString(),
     updatedAt: new Date(updatedAtMs).toISOString(),
     tags,
-    productArea,
     customerSegment,
     priorityScore,
     externalRef: externalMeta.externalRef,
@@ -758,7 +729,6 @@ const validateMockFeedback = (items: TicketRecord[]) => {
     sentiment: {} as Record<string, number>,
     status: {} as Record<string, number>,
     owner: {} as Record<string, number>,
-    productArea: {} as Record<string, number>,
     customerSegment: {} as Record<string, number>,
   };
   const tokens = { login: 0, android: 0, ios: 0, billing: 0, payment: 0 };
@@ -767,7 +737,7 @@ const validateMockFeedback = (items: TicketRecord[]) => {
   let missingFields = 0;
   let externalUrlCount = 0;
   items.forEach((item) => {
-    if (!item.updatedAt || !item.tags?.length || !item.productArea || !item.customerSegment) {
+    if (!item.updatedAt || !item.tags?.length || !item.customerSegment) {
       missingFields += 1;
     }
     if ('timestamp' in (item as Record<string, unknown>)) {
@@ -779,7 +749,6 @@ const validateMockFeedback = (items: TicketRecord[]) => {
     counts.sentiment[item.sentiment] = (counts.sentiment[item.sentiment] ?? 0) + 1;
     counts.status[item.status] = (counts.status[item.status] ?? 0) + 1;
     counts.owner[item.owner] = (counts.owner[item.owner] ?? 0) + 1;
-    counts.productArea[item.productArea] = (counts.productArea[item.productArea] ?? 0) + 1;
     counts.customerSegment[item.customerSegment] = (counts.customerSegment[item.customerSegment] ?? 0) + 1;
     if (item.externalUrl) externalUrlCount += 1;
     const createdAtMs = new Date(item.createdAt).getTime();

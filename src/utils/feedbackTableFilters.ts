@@ -8,7 +8,6 @@ export type TableFilters = {
   urgencies: string[];
   urgencyHighPlus: boolean;
   issueTypes: string[];
-  productAreas: string[];
   owners: string[];
   segments: string[];
   statuses: string[];
@@ -27,7 +26,6 @@ export const DEFAULT_FILTERS: TableFilters = {
   urgencies: [],
   urgencyHighPlus: false,
   issueTypes: [],
-  productAreas: [],
   owners: [],
   segments: [],
   statuses: DEFAULT_STATUSES,
@@ -104,7 +102,6 @@ export const parseFiltersFromSearch = (search: string) => {
   const sentiments = parseListParam(params.get('sentiment'));
   const urgencies = parseListParam(params.get('urgency'));
   const issueTypes = parseListParam(params.get('issueTypes'));
-  const productAreas = parseListParam(params.get('productAreas'));
   const owners = parseListParam(params.get('owners'));
   const segments = parseListParam(params.get('segments'));
   const statuses = parseListParam(params.get('status'));
@@ -118,7 +115,6 @@ export const parseFiltersFromSearch = (search: string) => {
     sentiments,
     urgencies,
     issueTypes,
-    productAreas,
     owners,
     segments,
     statuses: statuses.length ? statuses : DEFAULT_STATUSES,
@@ -154,7 +150,6 @@ export const serializeFiltersToSearch = (filters: TableFilters, now = new Date()
     pushList('urgency', filters.urgencies);
   }
   pushList('issueTypes', filters.issueTypes);
-  pushList('productAreas', filters.productAreas);
   pushList('owners', filters.owners);
   pushList('segments', filters.segments);
   if (filters.statuses.length && sortedStatuses.join(',') !== defaultStatuses.join(',')) {
@@ -233,8 +228,6 @@ export const applyFilters = (entries: FeedbackItem[], filters: TableFilters, now
     if (filters.sentiments.length && !filters.sentiments.includes(item.sentiment)) return false;
     if (effectiveUrgencies.length && !effectiveUrgencies.includes(item.urgency)) return false;
     if (filters.issueTypes.length && !filters.issueTypes.includes(item.issueType)) return false;
-    const productArea = (item.productArea ?? 'other').toLowerCase();
-    if (filters.productAreas.length && !filters.productAreas.includes(productArea)) return false;
     const owner = normalizeOwner(item);
     if (filters.owners.length && !filters.owners.includes(owner)) return false;
     const segment = (item.customerSegment ?? 'unknown').toLowerCase();

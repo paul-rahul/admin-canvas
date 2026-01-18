@@ -676,7 +676,7 @@ const Index = () => {
           {/* Feedback Table */}
           <div className="-mt-10">
             <FeedbackTable
-              feedback={filteredFeedback}
+              feedback={feedback}
               onSelect={setSelectedItem}
               globalSource={activeSource}
               globalTime={activeTime}

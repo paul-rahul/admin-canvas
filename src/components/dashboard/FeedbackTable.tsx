@@ -99,16 +99,6 @@ const ISSUE_TYPE_OPTIONS = [
   { value: 'pricing', label: 'Pricing' },
   { value: 'documentation', label: 'Docs' },
 ];
-const PRODUCT_AREA_OPTIONS = [
-  { value: 'auth', label: 'Auth' },
-  { value: 'billing', label: 'Billing' },
-  { value: 'integrations', label: 'Integrations' },
-  { value: 'performance', label: 'Performance' },
-  { value: 'ui', label: 'UI' },
-  { value: 'notifications', label: 'Notifications' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'other', label: 'Other' },
-];
 const OWNER_OPTIONS = [
   { value: 'product', label: 'Product' },
   { value: 'engineering', label: 'Engineering' },
@@ -145,7 +135,6 @@ const CLEAR_FILTERS: TableFilters = {
   urgencies: [],
   urgencyHighPlus: false,
   issueTypes: [],
-  productAreas: [],
   owners: [],
   segments: [],
   statuses: [],
@@ -194,7 +183,6 @@ function FeedbackTableComponent({
   const [draftFilters, setDraftFilters] = useState<TableFilters>(initialFilters);
   const [isFilterOpen, setIsFilterOpen] = useState<'icon' | 'plus' | null>(null);
   const [searchInput, setSearchInput] = useState(initialFilters.search);
-  const [tagSearch, setTagSearch] = useState('');
   const [sortKey, setSortKey] = useState<'time' | 'urgency' | 'sentiment'>('time');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [baseDefaultFilters, setBaseDefaultFilters] = useState<TableFilters>(() => ({
@@ -240,16 +228,6 @@ function FeedbackTableComponent({
     );
   }, [feedback]);
 
-  const productAreaOptions = useMemo(() => {
-    const present = new Set<string>();
-    feedback.forEach((item) => {
-      present.add((item.productArea ?? 'other').toLowerCase());
-    });
-    return PRODUCT_AREA_OPTIONS.filter(
-      (option) => present.has(option.value) || option.value === 'other'
-    );
-  }, [feedback]);
-
   const segmentOptions = useMemo(() => {
     const present = new Set<string>();
     feedback.forEach((item) => {
@@ -273,11 +251,6 @@ function FeedbackTableComponent({
       .map(([tag]) => tag);
   }, [feedback]);
 
-  const filteredTags = useMemo(() => {
-    const query = tagSearch.trim().toLowerCase();
-    if (!query) return tagOptions;
-    return tagOptions.filter((tag) => tag.includes(query));
-  }, [tagOptions, tagSearch]);
 
   const otherSources = useMemo(() => {
     const known = new Set(SOURCE_OPTIONS.map((option) => option.value).filter((value) => value !== 'other'));
@@ -353,21 +326,6 @@ function FeedbackTableComponent({
       startDate: nextStart,
       endDate: nextEnd,
     }));
-    setFilters((prev) => {
-      if (
-        prev.timePreset === baseDefaultFilters.timePreset &&
-        prev.startDate === baseDefaultFilters.startDate &&
-        prev.endDate === baseDefaultFilters.endDate
-      ) {
-        return {
-          ...prev,
-          timePreset: nextPreset,
-          startDate: nextStart,
-          endDate: nextEnd,
-        };
-      }
-      return prev;
-    });
   }, [feedback, hasQueryParams, baseDefaultFilters.timePreset, baseDefaultFilters.startDate, baseDefaultFilters.endDate]);
 
   const getUpdatedAtMs = useCallback((item: FeedbackItem) => {
@@ -501,7 +459,6 @@ function FeedbackTableComponent({
     isSameList(filters.urgencies, appliedDefaultFilters.urgencies) &&
     filters.urgencyHighPlus === appliedDefaultFilters.urgencyHighPlus &&
     isSameList(filters.issueTypes, appliedDefaultFilters.issueTypes) &&
-    isSameList(filters.productAreas, appliedDefaultFilters.productAreas) &&
     isSameList(filters.owners, appliedDefaultFilters.owners) &&
     isSameList(filters.segments, appliedDefaultFilters.segments) &&
     isSameList(filters.statuses, appliedDefaultFilters.statuses) &&
@@ -516,7 +473,6 @@ function FeedbackTableComponent({
     filters.sentiments.length ? 'Sentiment' : null,
     filters.urgencyHighPlus || filters.urgencies.length ? 'Urgency' : null,
     filters.issueTypes.length ? 'Issue Type' : null,
-    filters.productAreas.length ? 'Product Area' : null,
     filters.owners.length ? 'Owner' : null,
     filters.segments.length ? 'Segment' : null,
     filters.statuses.length ? 'Status' : null,
@@ -543,7 +499,6 @@ function FeedbackTableComponent({
     ...ISSUE_TYPE_OPTIONS.map((option) => option.value),
     ...otherIssueTypes,
   ];
-  const allProductAreas = productAreaOptions.map((option) => option.value);
   const allSegments = segmentOptions.map((option) => option.value);
   const allTags = tagOptions;
 
@@ -614,18 +569,6 @@ function FeedbackTableComponent({
           .join(', ');
     chips.push({ key: 'issueTypes', label: `Issue Type: ${label}` });
   }
-  if (filters.productAreas.length) {
-    const label = allSelected(filters.productAreas, allProductAreas)
-      ? 'All'
-      : filters.productAreas
-          .map(
-            (value) =>
-              PRODUCT_AREA_OPTIONS.find((option) => option.value === value)?.label ??
-              formatFilterLabel(value)
-          )
-          .join(', ');
-    chips.push({ key: 'productAreas', label: `Product Area: ${label}` });
-  }
   if (filters.owners.length) {
     const label = allSelected(
       filters.owners,
@@ -685,7 +628,6 @@ function FeedbackTableComponent({
     | 'sentiments'
     | 'urgencies'
     | 'issueTypes'
-    | 'productAreas'
     | 'owners'
     | 'segments'
     | 'statuses'
@@ -741,7 +683,6 @@ function FeedbackTableComponent({
       | 'sentiments'
       | 'urgencies'
       | 'issueTypes'
-      | 'productAreas'
       | 'owners'
       | 'segments'
       | 'statuses'
@@ -760,7 +701,6 @@ function FeedbackTableComponent({
       | 'sentiments'
       | 'urgencies'
       | 'issueTypes'
-      | 'productAreas'
       | 'owners'
       | 'segments'
       | 'statuses'
@@ -808,6 +748,128 @@ function FeedbackTableComponent({
   const filterPopoverContent = (
     <PopoverContent className="w-[460px] p-3">
       <Accordion type="multiple" className="max-h-[440px] overflow-y-auto pr-1">
+        <AccordionItem value="time" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Time</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.timePreset === 'custom'
+                ? 'Custom'
+                : draftFilters.timePreset === 'all'
+                ? 'All'
+                : TIME_PRESETS.find((option) => option.value === draftFilters.timePreset)?.label ?? 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {TIME_PRESETS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.timePreset === option.value}
+                      onCheckedChange={() => updateTimePreset(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+                {draftFilters.timePreset === 'custom' && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
+                              !customFrom && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="h-3.5 w-3.5" />
+                            {customFrom ? format(customFrom, 'MMM d, yyyy') : 'From'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-auto p-2">
+                          <Calendar
+                            mode="single"
+                            selected={customFrom ?? undefined}
+                            onSelect={(date) => {
+                              const nextDate = date ? applyTimeToDate(date, formatTime(customFrom)) : null;
+                              updateCustomDateTime('startDate', nextDate);
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <Input
+                        type="time"
+                        value={formatTime(customFrom)}
+                        onChange={(event) => {
+                          const baseDate = customFrom ?? new Date();
+                          const next = applyTimeToDate(baseDate, event.target.value);
+                          updateCustomDateTime('startDate', next);
+                        }}
+                        className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
+                              !customTo && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="h-3.5 w-3.5" />
+                            {customTo ? format(customTo, 'MMM d, yyyy') : 'To'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-auto p-2">
+                          <Calendar
+                            mode="single"
+                            selected={customTo ?? undefined}
+                            onSelect={(date) => {
+                              const nextDate = date ? applyTimeToDate(date, formatTime(customTo)) : null;
+                              updateCustomDateTime('endDate', nextDate);
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <Input
+                        type="time"
+                        value={formatTime(customTo)}
+                        onChange={(event) => {
+                          const baseDate = customTo ?? new Date();
+                          const next = applyTimeToDate(baseDate, event.target.value);
+                          updateCustomDateTime('endDate', next);
+                        }}
+                        className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={selectAllTime}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAllTime}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
         <AccordionItem value="source" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Source</span>
@@ -1026,53 +1088,6 @@ function FeedbackTableComponent({
             </div>
           </AccordionContent>
         </AccordionItem>
-        <AccordionItem value="productArea" className="border-b border-border/60">
-          <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Product Area</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {selectionSummary(
-                draftFilters.productAreas,
-                allProductAreas,
-                (value) =>
-                  PRODUCT_AREA_OPTIONS.find((option) => option.value === value)?.label ??
-                  formatFilterLabel(value)
-              )}
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="pb-2">
-            <div className="flex items-start gap-3">
-              <div className="flex-1 space-y-2">
-                {productAreaOptions.map((option) => (
-                  <label key={option.value} className={filterRowClass}>
-                    <Checkbox
-                      checked={draftFilters.productAreas.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('productAreas', option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="w-[96px] shrink-0 space-y-2 text-right">
-                <button
-                  type="button"
-                  onClick={() =>
-                    selectAllOptions('productAreas', productAreaOptions.map((option) => option.value))
-                  }
-                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={() => clearAllOptions('productAreas')}
-                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
-                >
-                  Clear all
-                </button>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
         <AccordionItem value="owner" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
             <span className="inline-flex w-[88px]">Owner</span>
@@ -1208,175 +1223,6 @@ function FeedbackTableComponent({
             </div>
           </AccordionContent>
         </AccordionItem>
-        <AccordionItem value="tags" className="border-b border-border/60">
-          <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Issue Type</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {selectionSummary(draftFilters.tags, allTags, (value) => value, true)}
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="pb-2">
-            <div className="flex items-start gap-3">
-              <div className="flex-1 space-y-2">
-                <Input
-                  placeholder="Search tags..."
-                  value={tagSearch}
-                  onChange={(event) => setTagSearch(event.target.value)}
-                  className="h-8 bg-muted/60 border-border/70 text-xs"
-                />
-                <div className="max-h-[180px] space-y-2 overflow-y-auto pr-1">
-                  {filteredTags.map((tag) => (
-                    <label key={tag} className={filterRowClass}>
-                      <Checkbox
-                        checked={draftFilters.tags.includes(tag)}
-                        onCheckedChange={() => toggleFilterValue('tags', tag)}
-                      />
-                      <span className="capitalize">{tag}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="w-[96px] shrink-0 space-y-2 text-right">
-                <button
-                  type="button"
-                  onClick={() => selectAllOptions('tags', allTags)}
-                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={() => clearAllOptions('tags')}
-                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
-                >
-                  Clear all
-                </button>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="time" className="border-none">
-          <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Time</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {draftFilters.timePreset === 'custom'
-                ? 'Custom'
-                : draftFilters.timePreset === 'all'
-                ? 'All'
-                : TIME_PRESETS.find((option) => option.value === draftFilters.timePreset)?.label ?? 'All'}
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="pb-2">
-            <div className="flex items-start gap-3">
-              <div className="flex-1 space-y-2">
-                {TIME_PRESETS.map((option) => (
-                  <label key={option.value} className={filterRowClass}>
-                    <Checkbox
-                      checked={draftFilters.timePreset === option.value}
-                      onCheckedChange={() => updateTimePreset(option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-                {draftFilters.timePreset === 'custom' && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={cn(
-                              "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
-                              !customFrom && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="h-3.5 w-3.5" />
-                            {customFrom ? format(customFrom, 'MMM d, yyyy') : 'From'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-auto p-2">
-                          <Calendar
-                            mode="single"
-                            selected={customFrom ?? undefined}
-                            onSelect={(date) => {
-                              const nextDate = date ? applyTimeToDate(date, formatTime(customFrom)) : null;
-                              updateCustomDateTime('startDate', nextDate);
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <Input
-                        type="time"
-                        value={formatTime(customFrom)}
-                        onChange={(event) => {
-                          const baseDate = customFrom ?? new Date();
-                          const next = applyTimeToDate(baseDate, event.target.value);
-                          updateCustomDateTime('startDate', next);
-                        }}
-                        className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
-                      />
-                    </div>
-                    <span className="text-xs text-muted-foreground">to</span>
-                    <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={cn(
-                              "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
-                              !customTo && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="h-3.5 w-3.5" />
-                            {customTo ? format(customTo, 'MMM d, yyyy') : 'To'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-auto p-2">
-                          <Calendar
-                            mode="single"
-                            selected={customTo ?? undefined}
-                            onSelect={(date) => {
-                              const nextDate = date ? applyTimeToDate(date, formatTime(customTo)) : null;
-                              updateCustomDateTime('endDate', nextDate);
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <Input
-                        type="time"
-                        value={formatTime(customTo)}
-                        onChange={(event) => {
-                          const baseDate = customTo ?? new Date();
-                          const next = applyTimeToDate(baseDate, event.target.value);
-                          updateCustomDateTime('endDate', next);
-                        }}
-                        className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="w-[96px] shrink-0 space-y-2 text-right">
-                <button
-                  type="button"
-                  onClick={selectAllTime}
-                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAllTime}
-                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
-                >
-                  Clear all
-                </button>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
       </Accordion>
       <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/60 pt-3">
         <Button
@@ -1490,7 +1336,6 @@ function FeedbackTableComponent({
                     'Sentiment',
                     'Urgency',
                     'Issue Type',
-                    'Product Area',
                     'Owner',
                     'Updated',
                     'Status',
@@ -1505,7 +1350,6 @@ function FeedbackTableComponent({
                     item.sentiment,
                     item.urgency,
                     issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
-                    item.productArea ?? 'other',
                     formatFilterLabel(normalizeOwner(item)),
                     item.updatedAt ?? item.createdAt ?? '',
                     formatFilterLabel(normalizeStatus(item)),
@@ -1548,28 +1392,60 @@ function FeedbackTableComponent({
                 <button
                   type="button"
                   onClick={() => {
-                    if (chip.key === 'sources') setFilters((prev) => ({ ...prev, sources: [] }));
-                    if (chip.key === 'sentiments') setFilters((prev) => ({ ...prev, sentiments: [] }));
-                    if (chip.key === 'urgency_high')
+                    if (chip.key === 'sources') {
+                      setFilters((prev) => ({ ...prev, sources: [] }));
+                      setDraftFilters((prev) => ({ ...prev, sources: [] }));
+                    }
+                    if (chip.key === 'sentiments') {
+                      setFilters((prev) => ({ ...prev, sentiments: [] }));
+                      setDraftFilters((prev) => ({ ...prev, sentiments: [] }));
+                    }
+                    if (chip.key === 'urgency_high') {
                       setFilters((prev) => ({ ...prev, urgencyHighPlus: false }));
-                    if (chip.key === 'urgencies') setFilters((prev) => ({ ...prev, urgencies: [] }));
-                    if (chip.key === 'issueTypes') setFilters((prev) => ({ ...prev, issueTypes: [] }));
-                    if (chip.key === 'productAreas') setFilters((prev) => ({ ...prev, productAreas: [] }));
-                    if (chip.key === 'owners') setFilters((prev) => ({ ...prev, owners: [] }));
-                    if (chip.key === 'segments') setFilters((prev) => ({ ...prev, segments: [] }));
-                    if (chip.key === 'statuses')
+                      setDraftFilters((prev) => ({ ...prev, urgencyHighPlus: false }));
+                    }
+                    if (chip.key === 'urgencies') {
+                      setFilters((prev) => ({ ...prev, urgencies: [] }));
+                      setDraftFilters((prev) => ({ ...prev, urgencies: [] }));
+                    }
+                    if (chip.key === 'issueTypes') {
+                      setFilters((prev) => ({ ...prev, issueTypes: [] }));
+                      setDraftFilters((prev) => ({ ...prev, issueTypes: [] }));
+                    }
+                    if (chip.key === 'owners') {
+                      setFilters((prev) => ({ ...prev, owners: [] }));
+                      setDraftFilters((prev) => ({ ...prev, owners: [] }));
+                    }
+                    if (chip.key === 'segments') {
+                      setFilters((prev) => ({ ...prev, segments: [] }));
+                      setDraftFilters((prev) => ({ ...prev, segments: [] }));
+                    }
+                    if (chip.key === 'statuses') {
                       setFilters((prev) => ({ ...prev, statuses: [] }));
-                    if (chip.key === 'tags') setFilters((prev) => ({ ...prev, tags: [] }));
-                    if (chip.key === 'time')
+                      setDraftFilters((prev) => ({ ...prev, statuses: [] }));
+                    }
+                    if (chip.key === 'tags') {
+                      setFilters((prev) => ({ ...prev, tags: [] }));
+                      setDraftFilters((prev) => ({ ...prev, tags: [] }));
+                    }
+                    if (chip.key === 'time') {
                       setFilters((prev) => ({
                         ...prev,
                         timePreset: 'all',
                         startDate: null,
                         endDate: null,
                       }));
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        timePreset: 'all',
+                        startDate: null,
+                        endDate: null,
+                      }));
+                    }
                     if (chip.key === 'search') {
                       setSearchInput('');
                       setFilters((prev) => ({ ...prev, search: '' }));
+                      setDraftFilters((prev) => ({ ...prev, search: '' }));
                     }
                   }}
                   className="text-muted-foreground hover:text-foreground"
