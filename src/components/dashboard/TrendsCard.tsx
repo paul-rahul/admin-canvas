@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { format } from 'date-fns';
 import { Activity, Info } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
@@ -37,6 +37,7 @@ type TrendPoint = {
   label: string;
   count: number;
   avgUrgency: number | null;
+  avgNegative: number | null;
   startMs: number;
   endMs: number;
 };
@@ -44,6 +45,7 @@ type TrendPoint = {
 type TrendPayload = {
   count: number;
   avgUrgency: number | null;
+  avgNegative: number | null;
   label: string;
 };
 
@@ -55,7 +57,7 @@ const TrendsTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
     <div className="rounded-lg border border-border/70 bg-background/95 px-3 py-2 text-xs shadow-card">
       <div className="mb-1 font-medium text-foreground">{data.label}</div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
-        <span>Tickets</span>
+        <span>Total Tickets</span>
         <span className="font-semibold text-foreground">{data.count}</span>
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
@@ -64,19 +66,56 @@ const TrendsTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
           {data.avgUrgency !== null ? data.avgUrgency.toFixed(2) : '—'}
         </span>
       </div>
+      <div className="flex items-center justify-between gap-3 text-muted-foreground">
+        <span>Avg negative</span>
+        <span className="font-semibold text-foreground">
+          {data.avgNegative !== null ? data.avgNegative.toFixed(2) : '—'}
+        </span>
+      </div>
     </div>
   );
 };
 
-const TrendsLegend = () => (
-  <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
-    <div className="flex items-center gap-2">
+const TrendsLegend = ({
+  visibility,
+  onToggle,
+}: {
+  visibility: { tickets: boolean; avgUrgency: boolean; avgNegative: boolean };
+  onToggle: (key: 'tickets' | 'avgUrgency' | 'avgNegative') => void;
+}) => (
+  <div
+    className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground"
+    onMouseDown={(event) => {
+      event.stopPropagation();
+    }}
+    onMouseUp={(event) => {
+      event.stopPropagation();
+    }}
+    onClick={(event) => {
+      event.stopPropagation();
+    }}
+  >
+    <button
+      type="button"
+      onClick={() => onToggle('tickets')}
+      onMouseDown={(event) => event.stopPropagation()}
+      className={`flex items-center gap-2 underline-offset-4 hover:underline ${
+        visibility.tickets ? 'text-foreground' : 'opacity-50'
+      }`}
+    >
       <span className="h-2 w-2 rounded-full bg-primary" />
-      <span>Tickets</span>
-    </div>
-    <div className="flex items-center gap-2">
-      <span className="h-2 w-2 rounded-full bg-info" />
-      <span>Avg Urgency</span>
+      <span>Total Tickets</span>
+    </button>
+    <div className={`flex items-center gap-2 ${visibility.avgUrgency ? 'text-foreground' : 'opacity-50'}`}>
+      <button
+        type="button"
+        onClick={() => onToggle('avgUrgency')}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="flex items-center gap-2 underline-offset-4 hover:underline"
+      >
+        <span className="h-2 w-2 rounded-full bg-info" />
+        <span>Avg Urgency</span>
+      </button>
       <TooltipProvider>
         <UiTooltip>
           <TooltipTrigger asChild>
@@ -90,6 +129,33 @@ const TrendsLegend = () => (
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
             Avg urgency is the mean of urgency scores (Low=1, Medium=2, High=3, Critical=4) in each time bucket.
+          </TooltipContent>
+        </UiTooltip>
+      </TooltipProvider>
+    </div>
+    <div className={`flex items-center gap-2 ${visibility.avgNegative ? 'text-foreground' : 'opacity-50'}`}>
+      <button
+        type="button"
+        onClick={() => onToggle('avgNegative')}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="flex items-center gap-2 underline-offset-4 hover:underline"
+      >
+        <span className="h-2 w-2 rounded-full bg-destructive" />
+        <span>Avg Negative</span>
+      </button>
+      <TooltipProvider>
+        <UiTooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full text-muted-foreground hover:text-foreground"
+              aria-label="Avg negative info"
+            >
+              <Info className="h-3 w-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
+            Avg negative = (negative tickets / total tickets) x 4.
           </TooltipContent>
         </UiTooltip>
       </TooltipProvider>
@@ -124,6 +190,11 @@ export function TrendsCard({
 }: TrendsCardProps) {
   const [selectedRangeMs, setSelectedRangeMs] = useState<{ from: number; to: number } | null>(null);
   const [lastPresetRangeKey, setLastPresetRangeKey] = useState<TimeRangeKey>('7d');
+  const [seriesVisibility, setSeriesVisibility] = useState({
+    tickets: true,
+    avgUrgency: true,
+    avgNegative: true,
+  });
   const selectedSource = sourceValue;
   const chartRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +209,16 @@ export function TrendsCard({
   const dragPixelStartRef = useRef<number | null>(null);
   const dragPixelEndRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  const toggleSeries = (key: 'tickets' | 'avgUrgency' | 'avgNegative') => {
+    setSeriesVisibility((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      if (!next.tickets && !next.avgUrgency && !next.avgNegative) {
+        return prev;
+      }
+      return next;
+    });
+  };
 
   const syncedRangeKey = useMemo<TimeRangeKey>(() => {
     if (timeFilter === '24h') return '1h';
@@ -216,6 +297,8 @@ export function TrendsCard({
       count: 0,
       urgencySum: 0,
       urgencyCount: 0,
+      sentimentCount: 0,
+      negativeCount: 0,
     }));
 
     trendEntries.forEach((entry) => {
@@ -232,12 +315,22 @@ export function TrendsCard({
         bucket.urgencySum += urgencyValue;
         bucket.urgencyCount += 1;
       }
+      const sentiment = entry.sentiment?.toLowerCase();
+      if (sentiment) {
+        bucket.sentimentCount += 1;
+        if (sentiment === 'negative') {
+          bucket.negativeCount += 1;
+        }
+      }
     });
 
     const basePoints = buckets.map((bucket) => ({
       label: format(new Date(bucket.start), formatString),
       count: bucket.count,
       avgUrgency: bucket.urgencyCount ? bucket.urgencySum / bucket.urgencyCount : null,
+      avgNegative: bucket.sentimentCount
+        ? (bucket.negativeCount / bucket.sentimentCount) * 4
+        : null,
       startMs: bucket.start,
       endMs: bucket.start + bucketMs,
     }));
@@ -596,6 +689,7 @@ export function TrendsCard({
           {hasData ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="transparent" />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }} />
                 <YAxis
                   yAxisId="left"
@@ -610,32 +704,49 @@ export function TrendsCard({
                   width={24}
                 />
                 <Tooltip content={<TrendsTooltip />} />
-                <Legend content={<TrendsLegend />} />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="count"
-                name="Tickets"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="avgUrgency"
-                name="Avg Urgency"
-                stroke="hsl(199 89% 48%)"
-                strokeWidth={2}
+              {seriesVisibility.tickets && (
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="count"
+                  name="Total Tickets"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )}
+              {seriesVisibility.avgUrgency && (
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="avgUrgency"
+                  name="Avg Urgency"
+                  stroke="hsl(199 89% 48%)"
+                  strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4, strokeWidth: 0 }}
                   connectNulls
                   isAnimationActive={false}
                 />
-              </LineChart>
-            </ResponsiveContainer>
+              )}
+              {seriesVisibility.avgNegative && (
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="avgNegative"
+                  name="Avg Negative"
+                  stroke="hsl(var(--destructive))"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
           ) : (
             <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 text-xs text-muted-foreground">
               No trend data available.
@@ -655,6 +766,9 @@ export function TrendsCard({
               }}
             />
           )}
+        </div>
+        <div className="mt-2">
+          <TrendsLegend visibility={seriesVisibility} onToggle={toggleSeries} />
         </div>
         <div className="mt-2 text-sm font-semibold text-foreground text-center">{topSourceTheme}</div>
       </div>
