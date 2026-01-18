@@ -240,10 +240,10 @@ const buildMockFeedback = (): FeedbackItem[] => {
   const tokenAssignments = assignTokens();
 
   const bucketWeights = [
-    { key: 'last24h', weight: 0.1, start: now - dayMs, end: now },
-    { key: 'last7d', weight: 0.35, start: now - 7 * dayMs, end: now - dayMs },
-    { key: 'last30d', weight: 0.35, start: now - 30 * dayMs, end: now - 7 * dayMs },
-    { key: 'older', weight: 0.1, start: now - 365 * dayMs, end: now - 30 * dayMs },
+    { key: 'last24h', weight: 0.25, start: now - dayMs, end: now },
+    { key: 'last7d', weight: 0.25, start: now - 7 * dayMs, end: now - dayMs },
+    { key: 'last30d', weight: 0.25, start: now - 30 * dayMs, end: now - 7 * dayMs },
+    { key: 'older', weight: 0.25, start: now - 365 * dayMs, end: now - 30 * dayMs },
   ];
   const bucketTotalWeight = bucketWeights.reduce((sum, item) => sum + item.weight, 0);
   const bucketCounts = bucketWeights.map((bucket) => ({

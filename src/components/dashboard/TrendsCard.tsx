@@ -786,7 +786,7 @@ function TrendsCardComponent({
     >
       <div className="flex w-full flex-col gap-1">
         {renderFilters()}
-        {!isExpanded && renderChart("h-80", true)}
+        {!isExpanded && renderChart("h-[22rem]", true)}
         <div className="mt-2">
           <TrendsLegend visibility={seriesVisibility} onToggle={toggleSeries} />
         </div>

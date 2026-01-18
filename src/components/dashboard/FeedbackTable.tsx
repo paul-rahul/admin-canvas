@@ -17,27 +17,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import {
+  ArrowDownUp,
+  Calendar as CalendarIcon,
   CheckCircle2,
+  Check,
   Filter as FilterIcon,
   Github,
   Headphones,
   Mail,
   MessageCircle,
+  Plus,
   Twitter,
   Users,
   X,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -114,6 +114,24 @@ const TIME_PRESETS = [
   { value: '30d' as const, label: 'Last 30d' },
   { value: 'custom' as const, label: 'Custom range' },
 ];
+const SORT_OPTIONS = [
+  { value: 'time', label: 'Time' },
+  { value: 'urgency', label: 'Urgency' },
+  { value: 'sentiment', label: 'Sentiment' },
+];
+const CLEAR_FILTERS: TableFilters = {
+  sources: [],
+  sentiments: [],
+  urgencies: [],
+  urgencyHighPlus: false,
+  issueTypes: [],
+  owners: [],
+  statuses: [],
+  timePreset: 'all',
+  startDate: null,
+  endDate: null,
+  search: '',
+};
 
 const getPageNumbers = (current: number, total: number) => {
   if (total <= 5) {
@@ -144,16 +162,18 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
   const initialFilters = useMemo(() => parseFiltersFromSearch(window.location.search), []);
   const hasQueryParams = useMemo(() => window.location.search.length > 1, []);
   const [filters, setFilters] = useState<TableFilters>(initialFilters);
+  const [draftFilters, setDraftFilters] = useState<TableFilters>(initialFilters);
+  const [isFilterOpen, setIsFilterOpen] = useState<'icon' | 'plus' | null>(null);
   const [searchInput, setSearchInput] = useState(initialFilters.search);
-  const [sortKey, setSortKey] = useState<'time_desc' | 'time_asc' | 'urgency' | 'sentiment'>(
-    'time_desc'
-  );
+  const [sortKey, setSortKey] = useState<'time' | 'urgency' | 'sentiment'>('time');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [baseDefaultFilters, setBaseDefaultFilters] = useState<TableFilters>(() => ({
     ...DEFAULT_FILTERS,
     timePreset: initialFilters.timePreset,
     startDate: initialFilters.startDate,
     endDate: initialFilters.endDate,
   }));
+  const appliedDefaultFilters = CLEAR_FILTERS;
 
   const otherIssueTypes = useMemo(() => {
     const known = new Set(ISSUE_TYPE_OPTIONS.map((option) => option.value));
@@ -203,6 +223,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
     window.history.replaceState(null, '', nextUrl);
   }, [filters]);
+
+  useEffect(() => {
+    if (!isFilterOpen) return;
+    setDraftFilters(filters);
+  }, [isFilterOpen, filters]);
 
   const appliedFilters = useMemo(() => {
     if (!filters.sources.includes('other')) return filters;
@@ -275,20 +300,23 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     indexed.sort((a, b) => {
       const aItem = a.item;
       const bItem = b.item;
-      if (sortKey === 'time_desc' || sortKey === 'time_asc') {
+      if (sortKey === 'time') {
         const aTime = aItem.timestamp?.getTime?.() ?? 0;
         const bTime = bItem.timestamp?.getTime?.() ?? 0;
-        const diff = sortKey === 'time_desc' ? bTime - aTime : aTime - bTime;
+        const diff = sortDir === 'desc' ? bTime - aTime : aTime - bTime;
         return diff !== 0 ? diff : a.index - b.index;
       }
       if (sortKey === 'urgency') {
-        const diff = (urgencyRank[bItem.urgency] ?? 0) - (urgencyRank[aItem.urgency] ?? 0);
-        if (diff !== 0) return diff;
+        const diff =
+          (urgencyRank[bItem.urgency] ?? 0) - (urgencyRank[aItem.urgency] ?? 0);
+        const ordered = sortDir === 'desc' ? diff : -diff;
+        if (ordered !== 0) return ordered;
       }
       if (sortKey === 'sentiment') {
         const diff =
           (sentimentRank[bItem.sentiment] ?? 0) - (sentimentRank[aItem.sentiment] ?? 0);
-        if (diff !== 0) return diff;
+        const ordered = sortDir === 'desc' ? diff : -diff;
+        if (ordered !== 0) return ordered;
       }
       const aTime = aItem.timestamp?.getTime?.() ?? 0;
       const bTime = bItem.timestamp?.getTime?.() ?? 0;
@@ -296,7 +324,7 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
       return timeDiff !== 0 ? timeDiff : a.index - b.index;
     });
     return indexed.map((entry) => entry.item);
-  }, [filteredFeedback, sortKey]);
+  }, [filteredFeedback, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedback.length / pageSize));
   const pageNumbers = useMemo(
@@ -311,6 +339,35 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
 
   const totalCount = feedback.length;
   const filteredCount = filteredFeedback.length;
+  const sortLabel = SORT_OPTIONS.find((option) => option.value === sortKey)?.label ?? 'Sort';
+  const filterRowClass = "flex items-center gap-2 text-sm leading-none min-h-[28px]";
+  const formatTime = (value: Date | null) => {
+    if (!value) return '';
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  };
+
+  const applyTimeToDate = (date: Date | null, timeValue: string) => {
+    if (!date) return null;
+    if (!timeValue) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    const [hour, minute] = timeValue.split(':').map(Number);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return date;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute);
+  };
+
+  const parseDateTimeValue = (value: string | null) => {
+    if (!value) return null;
+    const parsed = value.includes('T') ? new Date(value) : new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  };
+
+  const toDateTimeString = (value: Date | null) =>
+    value ? format(value, "yyyy-MM-dd'T'HH:mm") : null;
+  const customFrom = parseDateTimeValue(draftFilters.startDate);
+  const customTo = parseDateTimeValue(draftFilters.endDate);
 
   const isSameList = (a: string[], b: string[]) => {
     if (a.length !== b.length) return false;
@@ -320,17 +377,17 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
   };
 
   const isDefaultFilters =
-    isSameList(filters.sources, baseDefaultFilters.sources) &&
-    isSameList(filters.sentiments, baseDefaultFilters.sentiments) &&
-    isSameList(filters.urgencies, baseDefaultFilters.urgencies) &&
-    filters.urgencyHighPlus === baseDefaultFilters.urgencyHighPlus &&
-    isSameList(filters.issueTypes, baseDefaultFilters.issueTypes) &&
-    isSameList(filters.owners, baseDefaultFilters.owners) &&
-    isSameList(filters.statuses, baseDefaultFilters.statuses) &&
-    filters.timePreset === baseDefaultFilters.timePreset &&
-    filters.startDate === baseDefaultFilters.startDate &&
-    filters.endDate === baseDefaultFilters.endDate &&
-    filters.search === baseDefaultFilters.search;
+    isSameList(filters.sources, appliedDefaultFilters.sources) &&
+    isSameList(filters.sentiments, appliedDefaultFilters.sentiments) &&
+    isSameList(filters.urgencies, appliedDefaultFilters.urgencies) &&
+    filters.urgencyHighPlus === appliedDefaultFilters.urgencyHighPlus &&
+    isSameList(filters.issueTypes, appliedDefaultFilters.issueTypes) &&
+    isSameList(filters.owners, appliedDefaultFilters.owners) &&
+    isSameList(filters.statuses, appliedDefaultFilters.statuses) &&
+    filters.timePreset === appliedDefaultFilters.timePreset &&
+    filters.startDate === appliedDefaultFilters.startDate &&
+    filters.endDate === appliedDefaultFilters.endDate &&
+    filters.search === appliedDefaultFilters.search;
 
   const activeFilterCount = [
     filters.sources.length ? 'Source' : null,
@@ -338,8 +395,8 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     filters.urgencyHighPlus || filters.urgencies.length ? 'Urgency' : null,
     filters.issueTypes.length ? 'Issue Type' : null,
     filters.owners.length ? 'Owner' : null,
-    !isSameList(filters.statuses, baseDefaultFilters.statuses) ? 'Status' : null,
-    filters.timePreset !== baseDefaultFilters.timePreset || filters.startDate || filters.endDate
+    filters.statuses.length ? 'Status' : null,
+    filters.timePreset !== 'all' || filters.startDate || filters.endDate
       ? 'Time'
       : null,
     filters.search.trim() ? 'Search' : null,
@@ -349,50 +406,100 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     ? 'All filters'
     : `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'}`;
 
+  const allSelected = (selected: string[], allOptions: string[]) =>
+    selected.length > 0 &&
+    selected.length === allOptions.length &&
+    selected.every((value) => allOptions.includes(value));
+
+  const allSources = Array.from(
+    new Set([...SOURCE_OPTIONS.map((option) => option.value), ...otherSources])
+  );
+  const allIssueTypes = [
+    ...ISSUE_TYPE_OPTIONS.map((option) => option.value),
+    ...otherIssueTypes,
+  ];
+
   const chips = [];
   if (filters.sources.length) {
-    const label = filters.sources
-      .map((value) => SOURCE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
-      .join(', ');
+    const label = allSelected(filters.sources, allSources)
+      ? 'All'
+      : filters.sources
+          .map(
+            (value) =>
+              SOURCE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+          )
+          .join(', ');
     chips.push({ key: 'sources', label: `Source: ${label}` });
   }
   if (filters.sentiments.length) {
-    const label = filters.sentiments
-      .map((value) => SENTIMENT_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
-      .join(', ');
+    const label = allSelected(
+      filters.sentiments,
+      SENTIMENT_OPTIONS.map((option) => option.value)
+    )
+      ? 'All'
+      : filters.sentiments
+          .map(
+            (value) =>
+              SENTIMENT_OPTIONS.find((option) => option.value === value)?.label ??
+              formatFilterLabel(value)
+          )
+          .join(', ');
     chips.push({ key: 'sentiments', label: `Sentiment: ${label}` });
   }
   if (filters.urgencyHighPlus) {
     chips.push({ key: 'urgency_high', label: 'Urgency: High+' });
   } else if (filters.urgencies.length) {
-    const label = filters.urgencies
-      .map((value) => URGENCY_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
-      .join(', ');
+    const label = allSelected(
+      filters.urgencies,
+      URGENCY_OPTIONS.map((option) => option.value)
+    )
+      ? 'All'
+      : filters.urgencies
+          .map(
+            (value) =>
+              URGENCY_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+          )
+          .join(', ');
     chips.push({ key: 'urgencies', label: `Urgency: ${label}` });
   }
   if (filters.issueTypes.length) {
-    const label = filters.issueTypes
-      .map((value) => ISSUE_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
-      .join(', ');
+    const label = allSelected(filters.issueTypes, allIssueTypes)
+      ? 'All'
+      : filters.issueTypes
+          .map(
+            (value) =>
+              ISSUE_TYPE_OPTIONS.find((option) => option.value === value)?.label ??
+              formatFilterLabel(value)
+          )
+          .join(', ');
     chips.push({ key: 'issueTypes', label: `Issue Type: ${label}` });
   }
   if (filters.owners.length) {
-    const label = filters.owners
-      .map((value) => OWNER_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
-      .join(', ');
+    const label = allSelected(
+      filters.owners,
+      ownerOptions.map((option) => option.value)
+    )
+      ? 'All'
+      : filters.owners
+          .map((value) => OWNER_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
+          .join(', ');
     chips.push({ key: 'owners', label: `Owner: ${label}` });
   }
-  if (!isSameList(filters.statuses, baseDefaultFilters.statuses)) {
-    const label = filters.statuses
-      .map((value) => STATUS_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value))
-      .join(', ');
+  if (filters.statuses.length) {
+    const label = allSelected(
+      filters.statuses,
+      statusOptions.map((option) => option.value)
+    )
+      ? 'All'
+      : filters.statuses
+          .map(
+            (value) =>
+              STATUS_OPTIONS.find((option) => option.value === value)?.label ?? formatFilterLabel(value)
+          )
+          .join(', ');
     chips.push({ key: 'statuses', label: `Status: ${label}` });
   }
-  if (
-    filters.timePreset !== baseDefaultFilters.timePreset ||
-    filters.startDate ||
-    filters.endDate
-  ) {
+  if (filters.timePreset !== 'all' || filters.startDate || filters.endDate) {
     const timeLabel =
       filters.timePreset === 'custom'
         ? `${filters.startDate ?? '—'} → ${filters.endDate ?? '—'}`
@@ -412,7 +519,7 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
     | 'statuses';
 
   const toggleFilterValue = (key: FilterListKey, value: string) => {
-    setFilters((prev) => {
+    setDraftFilters((prev) => {
       const list = new Set(prev[key] as string[]);
       if (list.has(value)) {
         list.delete(value);
@@ -428,11 +535,11 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
   };
 
   const toggleUrgencyHighPlus = () => {
-    setFilters((prev) => ({ ...prev, urgencyHighPlus: !prev.urgencyHighPlus }));
+    setDraftFilters((prev) => ({ ...prev, urgencyHighPlus: !prev.urgencyHighPlus }));
   };
 
   const updateTimePreset = (value: TableFilters['timePreset']) => {
-    setFilters((prev) => {
+    setDraftFilters((prev) => {
       if (value !== 'custom') {
         return { ...prev, timePreset: value, startDate: null, endDate: null };
       }
@@ -440,29 +547,491 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
         return { ...prev, timePreset: value };
       }
       const now = new Date();
-      const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-        now.getDate()
-      ).padStart(2, '0')}`;
       const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(
-        start.getDate()
-      ).padStart(2, '0')}`;
+      const startDate = toDateTimeString(start);
+      const endDate = toDateTimeString(now);
       return { ...prev, timePreset: value, startDate, endDate };
     });
   };
 
-  const updateCustomDate = (key: 'startDate' | 'endDate', value: string) => {
-    setFilters((prev) => ({
+  const updateCustomDateTime = (key: 'startDate' | 'endDate', value: Date | null) => {
+    setDraftFilters((prev) => ({
       ...prev,
       timePreset: 'custom',
-      [key]: value || null,
+      [key]: toDateTimeString(value),
     }));
   };
 
-  const clearAllFilters = () => {
-    setFilters(baseDefaultFilters);
-    setSearchInput(baseDefaultFilters.search);
+  const selectAllOptions = (key: 'sources' | 'sentiments' | 'urgencies' | 'issueTypes' | 'owners' | 'statuses', values: string[]) => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      [key]: values,
+    }));
   };
+
+  const clearAllOptions = (key: 'sources' | 'sentiments' | 'urgencies' | 'issueTypes' | 'owners' | 'statuses') => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      [key]: [],
+    }));
+  };
+
+  const selectAllTime = () => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      timePreset: 'all',
+      startDate: null,
+      endDate: null,
+    }));
+  };
+
+  const clearAllTime = () => {
+    setDraftFilters((prev) => ({
+      ...prev,
+      timePreset: 'all',
+      startDate: null,
+      endDate: null,
+    }));
+  };
+
+  const clearAllDraftFilters = () => {
+    setDraftFilters(CLEAR_FILTERS);
+  };
+
+  const clearAllAppliedFilters = () => {
+    setFilters(CLEAR_FILTERS);
+    setSearchInput('');
+  };
+
+  const applyDraftFilters = () => {
+    setFilters(draftFilters);
+    setSearchInput(draftFilters.search);
+    setIsFilterOpen(null);
+  };
+
+  const filterPopoverContent = (
+    <PopoverContent className="w-[460px] p-3">
+      <Accordion type="multiple" className="max-h-[440px] overflow-y-auto pr-1">
+        <AccordionItem value="source" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Source</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.sources.length || 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {SOURCE_OPTIONS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.sources.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('sources', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('sources', SOURCE_OPTIONS.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('sources')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="sentiment" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Sentiment</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.sentiments.length || 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {SENTIMENT_OPTIONS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.sentiments.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('sentiments', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('sentiments', SENTIMENT_OPTIONS.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('sentiments')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="urgency" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Urgency</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.urgencyHighPlus ? 'High+' : draftFilters.urgencies.length || 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                <label className={filterRowClass}>
+                  <Checkbox
+                    checked={draftFilters.urgencyHighPlus}
+                    onCheckedChange={toggleUrgencyHighPlus}
+                  />
+                  <span>&gt;= High</span>
+                </label>
+                {URGENCY_OPTIONS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.urgencies.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('urgencies', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      urgencies: URGENCY_OPTIONS.map((option) => option.value),
+                      urgencyHighPlus: false,
+                    }));
+                  }}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      urgencies: [],
+                      urgencyHighPlus: false,
+                    }))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="issueType" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Issue Type</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.issueTypes.length || 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {ISSUE_TYPE_OPTIONS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.issueTypes.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('issueTypes', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+                {otherIssueTypes.length > 0 && (
+                  <div className="pt-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Other</p>
+                    <div className="mt-1 space-y-1">
+                      {otherIssueTypes.map((value) => (
+                        <label key={value} className={filterRowClass}>
+                          <Checkbox
+                            checked={draftFilters.issueTypes.includes(value)}
+                            onCheckedChange={() => toggleFilterValue('issueTypes', value)}
+                          />
+                          <span>{formatFilterLabel(value)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('issueTypes', [
+                      ...ISSUE_TYPE_OPTIONS.map((option) => option.value),
+                      ...otherIssueTypes,
+                    ])
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('issueTypes')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="owner" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Owner</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.owners.length || 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {ownerOptions.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.owners.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('owners', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('owners', ownerOptions.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('owners')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="status" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Status</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.statuses.length || 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {statusOptions.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.statuses.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('statuses', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('statuses', statusOptions.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('statuses')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="time" className="border-none">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[88px]">Time</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {draftFilters.timePreset === 'custom'
+                ? 'Custom'
+                : draftFilters.timePreset === 'all'
+                ? 'All'
+                : TIME_PRESETS.find((option) => option.value === draftFilters.timePreset)?.label ?? 'All'}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {TIME_PRESETS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.timePreset === option.value}
+                      onCheckedChange={() => updateTimePreset(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+                {draftFilters.timePreset === 'custom' && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
+                              !customFrom && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="h-3.5 w-3.5" />
+                            {customFrom ? format(customFrom, 'MMM d, yyyy') : 'From'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-auto p-2">
+                          <Calendar
+                            mode="single"
+                            selected={customFrom ?? undefined}
+                            onSelect={(date) => {
+                              const nextDate = date ? applyTimeToDate(date, formatTime(customFrom)) : null;
+                              updateCustomDateTime('startDate', nextDate);
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <Input
+                        type="time"
+                        value={formatTime(customFrom)}
+                        onChange={(event) => {
+                          const baseDate = customFrom ?? new Date();
+                          const next = applyTimeToDate(baseDate, event.target.value);
+                          updateCustomDateTime('startDate', next);
+                        }}
+                        className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 shadow-sm">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "h-6 w-[104px] justify-start gap-1 border-border/60 bg-transparent px-2 text-xs",
+                              !customTo && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="h-3.5 w-3.5" />
+                            {customTo ? format(customTo, 'MMM d, yyyy') : 'To'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-auto p-2">
+                          <Calendar
+                            mode="single"
+                            selected={customTo ?? undefined}
+                            onSelect={(date) => {
+                              const nextDate = date ? applyTimeToDate(date, formatTime(customTo)) : null;
+                              updateCustomDateTime('endDate', nextDate);
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <Input
+                        type="time"
+                        value={formatTime(customTo)}
+                        onChange={(event) => {
+                          const baseDate = customTo ?? new Date();
+                          const next = applyTimeToDate(baseDate, event.target.value);
+                          updateCustomDateTime('endDate', next);
+                        }}
+                        className="h-6 w-[48px] border-0 bg-transparent px-1 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={selectAllTime}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAllTime}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+      <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/60 pt-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 border border-border/60 px-2"
+          onClick={clearAllDraftFilters}
+        >
+          Remove All
+        </Button>
+        <Button size="sm" className="h-8 px-3" onClick={applyDraftFilters}>
+          Apply filters
+        </Button>
+      </div>
+    </PopoverContent>
+  );
 
   useEffect(() => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
@@ -470,7 +1039,7 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters, sortKey]);
+  }, [filters, sortKey, sortDir]);
 
   return (
     <div className="glass rounded-xl overflow-hidden shadow-card opacity-0 animate-slide-up stagger-3">
@@ -485,7 +1054,7 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
           <div className="flex flex-1 justify-center px-2 min-w-[240px]">
             <div className="w-full max-w-[520px]">
               <Input
-                placeholder="Search in table..."
+                placeholder="Search within filtered results"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 className="h-9 bg-muted/70 border-border/70 focus:border-primary text-sm font-medium"
@@ -493,200 +1062,111 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
             </div>
           </div>
           <div className="flex items-center justify-end gap-3">
-            <div className="flex flex-col items-start gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Filter by</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" className="h-9 px-3 text-xs">
-                    <FilterIcon className="mr-2 h-3.5 w-3.5" />
-                    {filterSummary}
+            <div className="flex items-center gap-2">
+              <Popover
+                open={isFilterOpen === 'icon'}
+                onOpenChange={(open) => setIsFilterOpen(open ? 'icon' : null)}
+              >
+                <PopoverTrigger asChild>
+                  <Button variant="secondary" className="h-9 w-9 px-0" aria-label="Filter by">
+                    <FilterIcon className="h-4 w-4" />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[280px]">
-                  <DropdownMenuLabel>Source</DropdownMenuLabel>
-                  {SOURCE_OPTIONS.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.sources.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('sources', option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Sentiment</DropdownMenuLabel>
-                  {SENTIMENT_OPTIONS.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.sentiments.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('sentiments', option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Urgency</DropdownMenuLabel>
-                  <DropdownMenuCheckboxItem
-                    checked={filters.urgencyHighPlus}
-                    onCheckedChange={toggleUrgencyHighPlus}
-                  >
-                    &gt;= High
-                  </DropdownMenuCheckboxItem>
-                  {URGENCY_OPTIONS.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.urgencies.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('urgencies', option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Issue Type</DropdownMenuLabel>
-                  {ISSUE_TYPE_OPTIONS.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.issueTypes.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('issueTypes', option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  {otherIssueTypes.length > 0 && (
-                    <>
-                      <DropdownMenuLabel>Other</DropdownMenuLabel>
-                      {otherIssueTypes.map((value) => (
-                        <DropdownMenuCheckboxItem
-                          key={value}
-                          checked={filters.issueTypes.includes(value)}
-                          onCheckedChange={() => toggleFilterValue('issueTypes', value)}
-                        >
-                          {formatFilterLabel(value)}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Owner</DropdownMenuLabel>
-                  {ownerOptions.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.owners.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('owners', option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Status</DropdownMenuLabel>
-                  {statusOptions.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.statuses.includes(option.value)}
-                      onCheckedChange={() => toggleFilterValue('statuses', option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Time</DropdownMenuLabel>
-                  {TIME_PRESETS.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.timePreset === option.value}
-                      onCheckedChange={() => updateTimePreset(option.value)}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  {filters.timePreset === 'custom' && (
-                    <div className="p-2 space-y-2">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Start</label>
-                        <Input
-                          type="date"
-                          value={filters.startDate ?? ''}
-                          onChange={(event) => updateCustomDate('startDate', event.target.value)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">End</label>
-                        <Input
-                          type="date"
-                          value={filters.endDate ?? ''}
-                          onChange={(event) => updateCustomDate('endDate', event.target.value)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </PopoverTrigger>
+                {filterPopoverContent}
+              </Popover>
             </div>
-            <div className="flex flex-col items-start gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Sort by</span>
-              <div className="flex items-center gap-2">
-                <Select value={sortKey} onValueChange={(value) => setSortKey(value as typeof sortKey)}>
-                  <SelectTrigger className="h-9 w-[160px]">
-                    <SelectValue placeholder="Sort" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="time_desc">Time (newest)</SelectItem>
-                    <SelectItem value="time_asc">Time (oldest)</SelectItem>
-                    <SelectItem value="urgency">Urgency</SelectItem>
-                    <SelectItem value="sentiment">Sentiment</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center overflow-hidden rounded-md border border-border bg-secondary">
                 <Button
-                  variant="secondary"
-                  className="h-9 px-3 text-xs"
-                  onClick={() => {
-                    const headers = [
-                      'Source',
-                      'Description',
-                      'Sentiment',
-                      'Urgency',
-                      'Issue Type',
-                      'Owner',
-                      'Time',
-                      'Status',
-                    ];
-                    const rows = sortedFeedback.map((item) => [
-                      item.source,
-                      item.title,
-                      item.sentiment,
-                      item.urgency,
-                      issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
-                      formatFilterLabel(normalizeOwner(item)),
-                      item.timestamp?.toISOString?.() ?? '',
-                      formatFilterLabel(normalizeStatus(item)),
-                    ]);
-                    const csv = [headers, ...rows]
-                      .map((row) =>
-                        row
-                          .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
-                          .join(',')
-                      )
-                      .join('\n');
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'recent-feedback.csv';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                  }}
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-none bg-primary/15 text-primary hover:bg-primary/25"
+                  onClick={() => setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))}
+                  aria-label={`Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
                 >
-                  Download CSV
+                  <ArrowDownUp
+                    className={cn(
+                      'h-4.5 w-4.5 text-primary transition-transform',
+                      sortDir === 'asc' ? 'rotate-180' : 'rotate-0'
+                    )}
+                  />
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="h-9 w-[96px] justify-center px-2 text-xs rounded-none border-l border-border"
+                    >
+                      {sortLabel}
+                    </Button>
+                  </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-2">
+                  <div className="space-y-1">
+                    {SORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSortKey(option.value as typeof sortKey)}
+                        className="flex w-full items-center justify-between rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40"
+                      >
+                        <span>{option.label}</span>
+                        {sortKey === option.value && (
+                          <Check className="h-3.5 w-3.5 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
               </div>
+              <Button
+                variant="secondary"
+                className="h-9 px-3 text-xs"
+                onClick={() => {
+                  const headers = [
+                    'Source',
+                    'Description',
+                    'Sentiment',
+                    'Urgency',
+                    'Issue Type',
+                    'Owner',
+                    'Time',
+                    'Status',
+                  ];
+                  const rows = sortedFeedback.map((item) => [
+                    item.source,
+                    item.title,
+                    item.sentiment,
+                    item.urgency,
+                    issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
+                    formatFilterLabel(normalizeOwner(item)),
+                    item.timestamp?.toISOString?.() ?? '',
+                    formatFilterLabel(normalizeStatus(item)),
+                  ]);
+                  const csv = [headers, ...rows]
+                    .map((row) =>
+                      row
+                        .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
+                        .join(',')
+                    )
+                    .join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'recent-feedback.csv';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download CSV
+              </Button>
             </div>
           </div>
         </div>
-        {(chips.length > 0 || !isDefaultFilters) && (
+        {chips.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {chips.map((chip) => (
               <span
@@ -705,13 +1185,13 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
                     if (chip.key === 'issueTypes') setFilters((prev) => ({ ...prev, issueTypes: [] }));
                     if (chip.key === 'owners') setFilters((prev) => ({ ...prev, owners: [] }));
                     if (chip.key === 'statuses')
-                      setFilters((prev) => ({ ...prev, statuses: baseDefaultFilters.statuses }));
+                      setFilters((prev) => ({ ...prev, statuses: [] }));
                     if (chip.key === 'time')
                       setFilters((prev) => ({
                         ...prev,
-                        timePreset: baseDefaultFilters.timePreset,
-                        startDate: baseDefaultFilters.startDate,
-                        endDate: baseDefaultFilters.endDate,
+                        timePreset: 'all',
+                        startDate: null,
+                        endDate: null,
                       }));
                     if (chip.key === 'search') {
                       setSearchInput('');
@@ -726,9 +1206,32 @@ function FeedbackTableComponent({ feedback, onSelect }: FeedbackTableProps) {
               </span>
             ))}
             {!isDefaultFilters && (
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
-                Clear all
-              </Button>
+              <div className="flex items-center gap-2">
+                <Popover
+                  open={isFilterOpen === 'plus'}
+                  onOpenChange={(open) => setIsFilterOpen(open ? 'plus' : null)}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="h-7 w-7 rounded-full bg-primary/20 text-primary hover:bg-primary/30"
+                      aria-label="Add filters"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  {filterPopoverContent}
+                </Popover>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 border border-border/60 px-2 text-xs"
+                  onClick={clearAllAppliedFilters}
+                >
+                  Remove All
+                </Button>
+              </div>
             )}
           </div>
         )}

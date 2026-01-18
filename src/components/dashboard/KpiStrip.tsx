@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { BarChart2, ListChecks, TrendingDown, TrendingUp } from 'lucide-react';
+import { BarChart2, Info, ListChecks, TrendingDown, TrendingUp } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDashboardKpis } from '@/hooks/useDashboardKpis';
 import { KpiFilters, applyEntryFilters } from '@/lib/kpiUtils';
 import { FeedbackItem, issueTypeConfig, sourceConfig } from '@/data/mockFeedback';
@@ -37,9 +38,13 @@ function KpiStripComponent({
   const feedbackEntries = filteredEntries as FeedbackItem[];
   const issueTypeData = useMemo(() => {
     const counts: Record<string, number> = {};
+    const criticalCounts: Record<string, number> = {};
     feedbackEntries.forEach((entry) => {
       const issueType = entry.issueType ?? 'unknown';
       counts[issueType] = (counts[issueType] ?? 0) + 1;
+      if (entry.urgency === 'critical') {
+        criticalCounts[issueType] = (criticalCounts[issueType] ?? 0) + 1;
+      }
     });
     const total = feedbackEntries.length || 1;
     const sorted = Object.entries(counts)
@@ -47,6 +52,7 @@ function KpiStripComponent({
         issueType,
         count,
         percent: Math.max(2, Math.round((count / total) * 100)),
+        criticalPercent: count ? Math.round(((criticalCounts[issueType] ?? 0) / count) * 100) : 0,
         label: issueTypeConfig[issueType as keyof typeof issueTypeConfig]?.label ?? issueType,
         color:
           issueTypeConfig[issueType as keyof typeof issueTypeConfig]?.color ??
@@ -64,8 +70,18 @@ function KpiStripComponent({
         issueType: 'other',
         count: restCount,
         percent: restPercent,
+        criticalPercent: restCount
+          ? Math.round(
+              (rest.reduce((sum, entry) => sum + entry.criticalPercent * entry.count, 0) / restCount)
+            )
+          : 0,
         label: 'Others',
         color: 'bg-muted-foreground',
+        breakdown: rest.map((entry) => ({
+          label: entry.label,
+          count: entry.count,
+          criticalPercent: entry.criticalPercent,
+        })),
       },
     ];
   }, [feedbackEntries]);
@@ -228,7 +244,39 @@ function KpiStripComponent({
                     isTop ? "text-foreground font-semibold" : "text-muted-foreground",
                   ].join(' ')}
                 >
-                  <span>{entry.label}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {entry.label}
+                    {entry.issueType !== 'other' && (
+                      <span className="text-[10px] text-muted-foreground">
+                        ({entry.criticalPercent}% critical)
+                      </span>
+                    )}
+                    {entry.issueType === 'other' && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-muted-foreground hover:text-foreground"
+                              aria-label="Other themes info"
+                            >
+                              <Info className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
+                            <div className="space-y-1">
+                              {'breakdown' in entry &&
+                                entry.breakdown?.map((item: { label: string; count: number; criticalPercent: number }) => (
+                                  <p key={item.label}>
+                                    {item.label}: {item.count} ({item.criticalPercent}% critical)
+                                  </p>
+                                ))}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </span>
                   <span>{entry.count}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">

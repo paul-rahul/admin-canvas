@@ -47,7 +47,16 @@ function FilterBarComponent({
   onCustomRangeChange,
   isFiltering = false,
 }: FilterBarProps) {
-  const sources: (FeedbackSource | 'all')[] = ['all', 'support', 'discord', 'github', 'twitter', 'email', 'forum'];
+  const sources: (FeedbackSource | 'all')[] = [
+    'all',
+    'support',
+    'discord',
+    'github',
+    'twitter',
+    'email',
+    'forum',
+    'other',
+  ];
   const times: TimeFilter[] = ['24h', '7d', '30d', 'all', 'custom'];
   const timeLabels: Record<TimeFilter, string> = {
     '24h': 'Last 24h',

@@ -73,11 +73,17 @@ const toDateString = (date: Date) =>
     date.getDate()
   ).padStart(2, '0')}`;
 
+const parseStartValue = (value: string) =>
+  value.includes('T') ? new Date(value).getTime() : new Date(`${value}T00:00:00`).getTime();
+
+const parseEndValue = (value: string) =>
+  value.includes('T') ? new Date(value).getTime() : new Date(`${value}T23:59:59.999`).getTime();
+
 const inferPresetFromRange = (start: string, end: string, now: Date) => {
-  const startDate = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T23:59:59.999`);
-  const windowMs = endDate.getTime() - startDate.getTime();
-  const endDelta = Math.abs(endDate.getTime() - now.getTime());
+  const startMs = parseStartValue(start);
+  const endMs = parseEndValue(end);
+  const windowMs = endMs - startMs;
+  const endDelta = Math.abs(endMs - now.getTime());
   const nearNow = endDelta <= 2 * 60 * 60 * 1000;
   if (!nearNow) return 'custom' as TimePreset;
   if (windowMs <= DAY_MS) return '24h' as TimePreset;
@@ -181,12 +187,8 @@ const tokenizeSearch = (input: string) => {
 
 const resolveTimeWindow = (filters: TableFilters, nowMs: number) => {
   if (filters.timePreset === 'custom') {
-    const startMs = filters.startDate
-      ? new Date(`${filters.startDate}T00:00:00`).getTime()
-      : null;
-    const endMs = filters.endDate
-      ? new Date(`${filters.endDate}T23:59:59.999`).getTime()
-      : null;
+    const startMs = filters.startDate ? parseStartValue(filters.startDate) : null;
+    const endMs = filters.endDate ? parseEndValue(filters.endDate) : null;
     return { startMs, endMs };
   }
   if (filters.timePreset === '24h') {
@@ -208,7 +210,7 @@ export const applyFilters = (entries: FeedbackItem[], filters: TableFilters, now
     ? ['critical', 'high']
     : filters.urgencies;
   const { startMs, endMs } = resolveTimeWindow(filters, nowMs);
-  return entries.filter((item) => {
+  const filtered = entries.filter((item) => {
     if (filters.sources.length && !filters.sources.includes(item.source)) return false;
     if (filters.sentiments.length && !filters.sentiments.includes(item.sentiment)) return false;
     if (effectiveUrgencies.length && !effectiveUrgencies.includes(item.urgency)) return false;
@@ -223,14 +225,16 @@ export const applyFilters = (entries: FeedbackItem[], filters: TableFilters, now
       if (startMs !== null && timestamp < startMs) return false;
       if (endMs !== null && timestamp > endMs) return false;
     }
-    if (include.length || exclude.length) {
-      const description = (item.description ?? item.title ?? '').toLowerCase();
-      for (const token of include) {
-        if (!description.includes(token)) return false;
-      }
-      for (const token of exclude) {
-        if (description.includes(token)) return false;
-      }
+    return true;
+  });
+  if (!include.length && !exclude.length) return filtered;
+  return filtered.filter((item) => {
+    const description = (item.description ?? item.title ?? '').toLowerCase();
+    for (const token of include) {
+      if (!description.includes(token)) return false;
+    }
+    for (const token of exclude) {
+      if (description.includes(token)) return false;
     }
     return true;
   });
