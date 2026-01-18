@@ -145,14 +145,17 @@ export function TrendsCard({
 
   const displayRangeKey = timeFilter === 'custom' ? lastPresetRangeKey : syncedRangeKey;
 
+  const trendEntries = useMemo(() => {
+    if (!issueTypeId) return [];
+    return entries.filter((entry) => {
+      if (entry.issueType !== issueTypeId) return false;
+      if (selectedSource !== 'all' && entry.source !== selectedSource) return false;
+      return true;
+    });
+  }, [entries, issueTypeId, selectedSource]);
+
   const trendData = useMemo<TrendPoint[]>(() => {
     if (!issueTypeId) return [];
-    const resolveBucketMs = (rangeMs: number) => {
-      if (rangeMs <= DAY_MS) return 60 * 60 * 1000;
-      if (rangeMs <= 31 * DAY_MS) return DAY_MS;
-      if (rangeMs <= 180 * DAY_MS) return 7 * DAY_MS;
-      return 30 * DAY_MS;
-    };
 
     const customFrom = customRange?.from?.getTime?.() ?? null;
     const customTo = customRange?.to?.getTime?.() ?? null;
@@ -190,9 +193,7 @@ export function TrendsCard({
       urgencyCount: 0,
     }));
 
-    entries.forEach((entry) => {
-      if (entry.issueType !== issueTypeId) return;
-      if (selectedSource !== 'all' && entry.source !== selectedSource) return;
+    trendEntries.forEach((entry) => {
       const timestamp = entry.timestamp?.getTime?.() ?? null;
       if (!timestamp || timestamp < start || timestamp >= endMs) return;
       const bucketIndex = Math.min(
@@ -215,9 +216,36 @@ export function TrendsCard({
       startMs: bucket.start,
       endMs: bucket.start + bucketMs,
     }));
-  }, [entries, issueTypeId, selectedSource, timeFilter, syncedRangeKey, lastPresetRangeKey, customRange]);
+  }, [issueTypeId, timeFilter, syncedRangeKey, lastPresetRangeKey, customRange, trendEntries]);
 
   const hasData = trendData.some((point) => point.count > 0);
+
+  const topSourceTheme = useMemo(() => {
+    if (!entries.length) return '—';
+    const counts: Record<string, number> = {};
+    entries.forEach((entry) => {
+      const source = entry.source ?? 'unknown';
+      counts[source] = (counts[source] ?? 0) + 1;
+    });
+    const total = entries.length;
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (!top) return '—';
+    const [sourceKey, count] = top;
+    const label = sourceConfig[sourceKey as keyof typeof sourceConfig]?.label ?? sourceKey;
+    const percent = Math.round((count / total) * 100);
+    const themeCounts: Record<string, number> = {};
+    entries.forEach((entry) => {
+      const theme = entry.issueType ?? 'unknown';
+      themeCounts[theme] = (themeCounts[theme] ?? 0) + 1;
+    });
+    const topThemeEntry = Object.entries(themeCounts).sort((a, b) => b[1] - a[1])[0];
+    if (!topThemeEntry) return `Top source: ${label} (${percent}%) | Top theme: —`;
+    const [topTheme, themeCount] = topThemeEntry;
+    const themeLabel =
+      issueTypeConfig[topTheme as keyof typeof issueTypeConfig]?.label ?? topTheme;
+    const themePercent = Math.round((themeCount / total) * 100);
+    return `Top source: ${label} (${percent}%) | Top theme: ${themeLabel} (${themePercent}%)`;
+  }, [entries]);
 
   const derivedRange = useMemo(() => {
     if (!selectedRangeMs || trendData.length === 0) return null;
@@ -410,7 +438,6 @@ export function TrendsCard({
       value={null}
       icon={Activity}
       valueHidden
-      tooltip={issueTypeLabel ? `Trend for ${issueTypeLabel}` : 'Trend over time'}
       valueSpacerClassName="h-1"
       className="relative"
     >
@@ -423,14 +450,18 @@ export function TrendsCard({
         </Button>
       </div>
       <div className="flex w-full flex-col gap-1">
-        <div className="flex w-full items-center justify-end gap-2">
-          <Select
-            value={selectedSource}
-            onValueChange={(value) => onSourceChange?.(value as SourceKey)}
-          >
-            <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
-              <SelectValue placeholder="Source" />
-            </SelectTrigger>
+        <div className="flex w-full items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 text-sm font-bold text-foreground">
+            Drag on the chart to select a time range.
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Select
+              value={selectedSource}
+              onValueChange={(value) => onSourceChange?.(value as SourceKey)}
+            >
+              <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All sources</SelectItem>
               {Object.entries(sourceConfig).map(([key, config]) => (
@@ -440,21 +471,22 @@ export function TrendsCard({
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={displayRangeKey}
-            onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}
-          >
-            <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(timeRanges).map(([key, range]) => (
-                <SelectItem key={key} value={key}>
-                  {range.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select
+              value={displayRangeKey}
+              onValueChange={(value) => onTimeFilterChange?.(value as TimeRangeKey)}
+            >
+              <SelectTrigger className="h-7 w-[120px] text-[11px] focus:ring-0 focus:ring-offset-0 ring-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(timeRanges).map(([key, range]) => (
+                  <SelectItem key={key} value={key}>
+                    {range.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div
           className={[
@@ -581,6 +613,7 @@ export function TrendsCard({
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4, strokeWidth: 0 }}
+                isAnimationActive={false}
               />
               <Line
                 yAxisId="right"
@@ -592,6 +625,7 @@ export function TrendsCard({
                 dot={false}
                 activeDot={{ r: 4, strokeWidth: 0 }}
                 connectNulls
+                isAnimationActive={false}
               />
               </LineChart>
             </ResponsiveContainer>
@@ -638,6 +672,7 @@ export function TrendsCard({
             </div>
           </div>
         )}
+        <div className="mt-2 text-sm font-semibold text-foreground text-center">{topSourceTheme}</div>
       </div>
     </KpiCard>
   );

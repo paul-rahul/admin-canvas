@@ -12,7 +12,8 @@ import { TrendsCard } from '@/components/dashboard/TrendsCard';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 import { formatPercent } from '@/lib/kpiUtils';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, TrendingDown, TrendingUp, Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -65,13 +66,11 @@ const Index = () => {
   );
 
   const baseFiltered = useMemo(() => {
-    return indexedFeedback
-      .filter(({ item, searchText }) => {
-        const matchesSearch = searchNeedle === '' || searchText.includes(searchNeedle);
-        const matchesSource = activeSource === 'all' || item.source === activeSource;
-        return matchesSearch && matchesSource;
-      })
-      .map(({ item }) => item);
+    return indexedFeedback.filter(({ item, searchText }) => {
+      const matchesSearch = searchNeedle === '' || searchText.includes(searchNeedle);
+      const matchesSource = activeSource === 'all' || item.source === activeSource;
+      return matchesSearch && matchesSource;
+    });
   }, [indexedFeedback, searchNeedle, activeSource]);
 
   const filteredFeedback = useMemo(() => {
@@ -85,17 +84,23 @@ const Index = () => {
         ? 30 * 24 * 60 * 60 * 1000
         : null;
 
-    return baseFiltered.filter((item) => {
-      const timestampMs = item.timestamp?.getTime?.() ?? null;
+    const filtered: FeedbackItem[] = [];
+    baseFiltered.forEach(({ item, timestampMs }) => {
       if (activeTime === 'custom') {
-        return (
-          (!customRange.from ||
-            (timestampMs !== null && timestampMs >= customRange.from.getTime())) &&
-          (!customRange.to || (timestampMs !== null && timestampMs <= customRange.to.getTime()))
-        );
+        const withinFrom = !customRange.from || (timestampMs !== null && timestampMs >= customRange.from.getTime());
+        const withinTo = !customRange.to || (timestampMs !== null && timestampMs <= customRange.to.getTime());
+        if (withinFrom && withinTo) {
+          filtered.push(item);
+        }
+        return;
       }
-      return !timeWindow || (timestampMs !== null && now - timestampMs <= timeWindow);
+
+      if (!timeWindow || (timestampMs !== null && now - timestampMs <= timeWindow)) {
+        filtered.push(item);
+      }
     });
+
+    return filtered;
   }, [baseFiltered, activeTime, customRange]);
 
   const kpiFilters = useMemo(
@@ -116,7 +121,10 @@ const Index = () => {
     [activeSource, activeTime, searchNeedle, customRange]
   );
 
-  const feedbackForEmerging = baseFiltered;
+  const feedbackForEmerging = useMemo(
+    () => baseFiltered.map(({ item }) => item),
+    [baseFiltered]
+  );
 
   const emergingThemes = useMemo(() => {
     const themes = Object.entries(issueTypeConfig).map(([theme_id, config]) => ({
@@ -135,26 +143,63 @@ const Index = () => {
     return computeEmergingThemes(feedbackForEmerging, themes, endDate, windowDays, 3);
   }, [feedbackForEmerging, activeTime, customRange]);
 
-  const { criticalPercent, criticalCount } = useMemo(() => {
+  const { criticalPercent, criticalCount, criticalHighCount, criticalDelta } = useMemo(() => {
     const total = filteredFeedback.length;
     if (!total) {
-      return { criticalPercent: '—', criticalCount: 0 };
+      return { criticalPercent: '—', criticalCount: 0, criticalHighCount: 0, criticalDelta: null as number | null };
     }
     let criticalTotal = 0;
     let criticalOpen = 0;
+    let highOpen = 0;
     filteredFeedback.forEach((item) => {
       if (item.urgency === 'critical') {
         criticalTotal += 1;
         if (!item.resolved) {
           criticalOpen += 1;
         }
+      } else if (item.urgency === 'high' && !item.resolved) {
+        highOpen += 1;
       }
     });
+    let delta: number | null = null;
+    if (activeTime !== 'all') {
+      const now = Date.now();
+      const windowMs =
+        activeTime === 'custom' && customRange.from && customRange.to
+          ? customRange.to.getTime() - customRange.from.getTime()
+          : activeTime === '24h'
+          ? 24 * 60 * 60 * 1000
+          : activeTime === '7d'
+          ? 7 * 24 * 60 * 60 * 1000
+          : activeTime === '30d'
+          ? 30 * 24 * 60 * 60 * 1000
+          : null;
+      if (windowMs && windowMs > 0) {
+        const prevEnd =
+          activeTime === 'custom' && customRange.from
+            ? customRange.from.getTime()
+            : now - windowMs;
+        const prevStart = prevEnd - windowMs;
+        let prevCriticalOpen = 0;
+        baseFiltered.forEach(({ item, timestampMs }) => {
+          if (timestampMs === null) return;
+          if (timestampMs < prevStart || timestampMs >= prevEnd) return;
+          if (item.urgency === 'critical' && !item.resolved) {
+            prevCriticalOpen += 1;
+          }
+        });
+        if (prevCriticalOpen > 0) {
+          delta = ((criticalOpen - prevCriticalOpen) / prevCriticalOpen) * 100;
+        }
+      }
+    }
     return {
       criticalPercent: formatPercent((criticalTotal / total) * 100),
       criticalCount: criticalOpen,
+      criticalHighCount: highOpen,
+      criticalDelta: delta,
     };
-  }, [filteredFeedback]);
+  }, [filteredFeedback, baseFiltered, activeTime, customRange]);
 
   const topIssueType = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -267,19 +312,59 @@ const Index = () => {
                 }}
                 extraCard={(issueTypesCard) => (
                   <div className="grid h-full grid-rows-[1fr_auto] gap-4">
-                    <KpiCard
-                      title="Critical Issues"
-                      value={criticalPercent}
-                      icon={AlertTriangle}
-                      tooltip="Computed as unresolved items where urgency is critical within the current time window."
-                      className="h-full"
-                    >
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
-                        <span className="font-semibold text-foreground">unresolved</span> critical tickets require
-                        immediate attention.
-                      </p>
-                    </KpiCard>
+                <KpiCard
+                  title="Critical Issues"
+                  value={
+                    <span className="flex items-center gap-2">
+                      <span>{criticalPercent}</span>
+                      {criticalDelta !== null && (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          {criticalDelta >= 0 ? (
+                            <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5 text-success" />
+                          )}
+                          {Math.abs(criticalDelta).toFixed(1)}%
+                          {criticalDelta >= 0 ? ' increase' : ' decrease'}
+                        </span>
+                      )}
+                    </span>
+                  }
+                  icon={AlertTriangle}
+                  className="h-full"
+                >
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>
+                      Critical: <span className="font-semibold text-foreground">{criticalCount}</span> | High:{' '}
+                      <span className="font-semibold text-foreground">{criticalHighCount}</span>
+                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="rounded-full text-muted-foreground hover:text-foreground"
+                            aria-label="Critical issues info"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="z-[60] max-w-none whitespace-nowrap">
+                          <div className="space-y-1 text-xs">
+                            <p>• % critical = critical / total tickets in current window</p>
+                            <p>• Trend % = (current critical - previous critical) / previous critical</p>
+                            <p>• Counts unresolved Critical and High urgency tickets</p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{criticalCount}</span>{' '}
+                    <span className="font-semibold text-foreground">unresolved</span> critical tickets require
+                    immediate attention.
+                  </p>
+                </KpiCard>
                     <div className="h-full">{issueTypesCard}</div>
                   </div>
                 )}

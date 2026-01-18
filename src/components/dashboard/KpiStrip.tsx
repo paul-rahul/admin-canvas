@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { BarChart2, ListChecks } from 'lucide-react';
+import { BarChart2, ListChecks, TrendingDown, TrendingUp } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { useDashboardKpis } from '@/hooks/useDashboardKpis';
 import { KpiFilters, applyEntryFilters } from '@/lib/kpiUtils';
@@ -72,6 +72,78 @@ export function KpiStrip({
     return { items, top };
   }, [filteredEntries]);
 
+  const sentimentSummary = useMemo(() => {
+    if (!filteredEntries.length) {
+      return { text: '—', negativeDelta: null as number | null };
+    }
+    const counts: Record<string, number> = {};
+    filteredEntries.forEach((entry) => {
+      const key = (entry.sentiment ?? 'unknown').toLowerCase();
+      counts[key] = (counts[key] ?? 0) + 1;
+    });
+    const total = filteredEntries.length;
+    const build = (key: string, label: string) => {
+      const value = counts[key] ?? 0;
+      return `${label} ${Math.round((value / total) * 100)}%`;
+    };
+    return {
+      text: [build('positive', 'Positive'), build('neutral', 'Neutral'), build('negative', 'Negative')].join(' | '),
+      negativeDelta: null as number | null,
+    };
+  }, [filteredEntries]);
+
+  const topSourceSummary = useMemo(() => {
+    if (!filteredEntries.length) return '—';
+    const counts: Record<string, number> = {};
+    filteredEntries.forEach((entry) => {
+      const source = entry.source ?? 'unknown';
+      counts[source] = (counts[source] ?? 0) + 1;
+    });
+    const total = filteredEntries.length;
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (!top) return '—';
+    const [sourceKey, count] = top;
+    const label = sourceConfig[sourceKey as keyof typeof sourceConfig]?.label ?? sourceKey;
+    const percent = Math.round((count / total) * 100);
+    const themeCounts: Record<string, number> = {};
+    filteredEntries.forEach((entry) => {
+      const theme = entry.issueType ?? 'unknown';
+      themeCounts[theme] = (themeCounts[theme] ?? 0) + 1;
+    });
+    const topThemeEntry = Object.entries(themeCounts).sort((a, b) => b[1] - a[1])[0];
+    if (!topThemeEntry) return `Top source: ${label} (${percent}%) | Top theme: —`;
+    const [topTheme, themeCount] = topThemeEntry;
+    const themeLabel =
+      issueTypeConfig[topTheme as keyof typeof issueTypeConfig]?.label ?? topTheme;
+    const themePercent = Math.round((themeCount / total) * 100);
+    return `Top source: ${label} (${percent}%) | Top theme: ${themeLabel} (${themePercent}%)`;
+  }, [filteredEntries]);
+
+  const negativeDelta = useMemo(() => {
+    if (!entries || !filters.from || !filters.to) return null;
+    const from = new Date(filters.from);
+    const to = new Date(filters.to);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+    const windowMs = to.getTime() - from.getTime();
+    if (windowMs <= 0) return null;
+    const previousFrom = new Date(from.getTime() - windowMs);
+    const previousTo = new Date(from.getTime());
+    const previousFilters: KpiFilters = {
+      ...filters,
+      from: previousFrom,
+      to: previousTo,
+    };
+    const previousEntries = applyEntryFilters(entries, previousFilters);
+    const previousTotal = previousEntries.length;
+    if (!previousTotal) return null;
+    const prevNegative = previousEntries.filter((entry) => entry.sentiment === 'negative').length;
+    const prevPercent = (prevNegative / previousTotal) * 100;
+    const currentNegative =
+      filteredEntries.filter((entry) => entry.sentiment === 'negative').length;
+    const currentPercent = (currentNegative / filteredEntries.length) * 100;
+    return currentPercent - prevPercent;
+  }, [entries, filters, filteredEntries]);
+
   const topIssueTypeLabel = kpis.topIssueType
     ? issueTypeConfig[kpis.topIssueType.issueType as keyof typeof issueTypeConfig]?.label ??
       kpis.topIssueType.issueType
@@ -87,13 +159,45 @@ export function KpiStrip({
     unknown: 'hsl(var(--muted-foreground))',
   };
 
+  const deltaInfo = useMemo(() => {
+    if (!entries || !filters.from || !filters.to) {
+      return null;
+    }
+    const from = new Date(filters.from);
+    const to = new Date(filters.to);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return null;
+    }
+    const windowMs = to.getTime() - from.getTime();
+    if (windowMs <= 0) {
+      return null;
+    }
+    const previousFrom = new Date(from.getTime() - windowMs);
+    const previousTo = new Date(from.getTime());
+    const previousFilters: KpiFilters = {
+      ...filters,
+      from: previousFrom,
+      to: previousTo,
+    };
+    const previousEntries = applyEntryFilters(entries, previousFilters);
+    const previousCount = previousEntries.length;
+    const currentCount = filteredEntries.length;
+    if (previousCount === 0) {
+      return { percent: null, direction: 'up' as const };
+    }
+    const percent = ((currentCount - previousCount) / previousCount) * 100;
+    return {
+      percent,
+      direction: percent >= 0 ? 'up' : 'down',
+    };
+  }, [entries, filters, filteredEntries.length]);
+
   const issueTypesCard = (
     <KpiCard
-      title="Issue Types"
+      title="Theme distribution"
       value={null}
       isLoading={isLoading}
       icon={BarChart2}
-      tooltip="Total issues in view"
       valueHidden
       valueSpacerClassName="h-1"
     >
@@ -149,14 +253,51 @@ export function KpiStrip({
           <KpiCard
             title="Ticket Counter"
             value={
-              <span>
-                {kpis.totalEntries ?? '—'} <span className="text-base font-semibold">tickets</span>
+              <span className="flex items-center gap-2">
+                <span>
+                  {kpis.totalEntries ?? '—'}{' '}
+                  <span className="text-base font-semibold">tickets</span>
+                </span>
+                {deltaInfo && deltaInfo.percent !== null && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    {deltaInfo.direction === 'up' ? (
+                      <TrendingUp className="h-3.5 w-3.5 text-success" />
+                    ) : (
+                      <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+                    )}
+                    {Math.abs(deltaInfo.percent).toFixed(1)}%
+                    {deltaInfo.direction === 'up' ? ' increase' : ' decrease'}
+                  </span>
+                )}
               </span>
             }
             isLoading={isLoading}
             icon={ListChecks}
-            tooltip="Within current filters"
+            tooltip={
+              <div className="space-y-1 text-xs">
+                <p>• Total tickets = entries after Source and Time filters</p>
+                <p>• Delta % = (current - previous) / previous using the prior window</p>
+                <p>• Sentiment % = sentiment / total</p>
+                <p>• Negative % change = current Negative% - previous Negative%</p>
+              </div>
+            }
           >
+            <div className="text-[11px] font-semibold text-foreground whitespace-nowrap">
+              {topSourceSummary}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+              <span>{sentimentSummary.text}</span>
+              {negativeDelta !== null && (
+                <span className="inline-flex items-center gap-1">
+                  {negativeDelta >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5 text-success" />
+                  )}
+                  {Math.abs(negativeDelta).toFixed(1)}% Negative
+                </span>
+              )}
+            </div>
             {sourceData.items.length > 0 && (
               <div
                 className="mt-3 grid items-center gap-4 [grid-template-columns:minmax(240px,1fr)_1px_auto]"

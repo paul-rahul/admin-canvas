@@ -9,7 +9,7 @@ interface KpiCardProps {
   value: React.ReactNode;
   subtext?: React.ReactNode;
   isLoading?: boolean;
-  tooltip?: string;
+  tooltip?: React.ReactNode;
   trendBadge?: string;
   action?: React.ReactNode;
   className?: string;
@@ -58,7 +58,7 @@ export function KpiCard({
                       <Info className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="z-[60] max-w-xs whitespace-normal">
+                  <TooltipContent side="top" className="z-[60] max-w-none whitespace-nowrap">
                     {tooltip}
                   </TooltipContent>
                 </Tooltip>

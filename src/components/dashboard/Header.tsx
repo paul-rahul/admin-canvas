@@ -1,4 +1,4 @@
-import { Bell, Search, RefreshCw } from 'lucide-react';
+import { Bell, Search, RefreshCw, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
@@ -29,11 +29,10 @@ export function Header({ onSearch, onRefresh }: HeaderProps) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center glow-primary">
-              <span className="text-xl font-bold text-primary-foreground">F</span>
+              <Brain className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Feedback Hub</h1>
-              <p className="text-xs text-muted-foreground">Product feedback aggregator</p>
+              <h1 className="text-xl font-bold">Cerebro</h1>
             </div>
           </div>
         </div>
