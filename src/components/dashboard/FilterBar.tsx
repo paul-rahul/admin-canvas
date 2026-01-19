@@ -3,7 +3,7 @@ import { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button as UiButton } from '@/components/ui/button';
-import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sourceConfig, FeedbackSource } from '@/data/mockFeedback';
@@ -194,12 +194,6 @@ function FilterBarComponent({
               </div>
             ))}
           </div>
-          {isFiltering && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Applying
-            </div>
-          )}
         </div>
       </div>
     </div>

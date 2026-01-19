@@ -38,16 +38,16 @@ const normalizeUrgency = (value?: string | null) => {
 type TrendPoint = {
   label: string;
   count: number;
-  avgUrgency: number | null;
-  avgNegative: number | null;
+  priorityTickets: number | null;
+  negativeTickets: number | null;
   startMs: number;
   endMs: number;
 };
 
 type TrendPayload = {
   count: number;
-  avgUrgency: number | null;
-  avgNegative: number | null;
+  priorityTickets: number | null;
+  negativeTickets: number | null;
   label: string;
 };
 
@@ -63,15 +63,15 @@ const TrendsTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
         <span className="font-semibold text-foreground">{data.count}</span>
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
-        <span>Urgency %</span>
+        <span>Priority Tickets</span>
         <span className="font-semibold text-foreground">
-          {data.avgUrgency !== null ? `${data.avgUrgency.toFixed(1)}%` : '—'}
+          {data.priorityTickets !== null ? data.priorityTickets : '—'}
         </span>
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
-        <span>Negative %</span>
+        <span>Negative Tickets</span>
         <span className="font-semibold text-foreground">
-          {data.avgNegative !== null ? `${data.avgNegative.toFixed(1)}%` : '—'}
+          {data.negativeTickets !== null ? data.negativeTickets : '—'}
         </span>
       </div>
     </div>
@@ -82,11 +82,11 @@ const TrendsLegend = ({
   visibility,
   onToggle,
 }: {
-  visibility: { tickets: boolean; avgUrgency: boolean; avgNegative: boolean };
-  onToggle: (key: 'tickets' | 'avgUrgency' | 'avgNegative') => void;
+  visibility: { tickets: boolean; priorityTickets: boolean; negativeTickets: boolean };
+  onToggle: (key: 'tickets' | 'priorityTickets' | 'negativeTickets') => void;
 }) => (
   <div
-    className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground"
+    className="w-full text-xs text-muted-foreground"
     onMouseDown={(event) => {
       event.stopPropagation();
     }}
@@ -97,26 +97,31 @@ const TrendsLegend = ({
       event.stopPropagation();
     }}
   >
-    <button
-      type="button"
-      onClick={() => onToggle('tickets')}
-      onMouseDown={(event) => event.stopPropagation()}
-      className={`flex items-center gap-2 underline-offset-4 hover:underline ${
-        visibility.tickets ? 'text-foreground' : 'opacity-50'
-      }`}
-    >
-      <span className="h-2 w-2 rounded-full bg-primary" />
-      <span>Total Tickets</span>
-    </button>
-    <div className={`flex items-center gap-2 ${visibility.avgUrgency ? 'text-foreground' : 'opacity-50'}`}>
+    <div className="flex flex-wrap items-center justify-center gap-4">
       <button
         type="button"
-        onClick={() => onToggle('avgUrgency')}
+        onClick={() => onToggle('tickets')}
+        onMouseDown={(event) => event.stopPropagation()}
+        className={`flex items-center gap-2 underline-offset-4 hover:underline ${
+          visibility.tickets ? 'text-foreground' : 'opacity-50'
+        }`}
+      >
+        <span className="h-2 w-2 rounded-full bg-primary" />
+        <span>Total Tickets</span>
+      </button>
+      <div
+      className={`flex items-center gap-2 ${
+        visibility.priorityTickets ? 'text-foreground' : 'opacity-50'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onToggle('priorityTickets')}
         onMouseDown={(event) => event.stopPropagation()}
         className="flex items-center gap-2 underline-offset-4 hover:underline"
       >
         <span className="h-2 w-2 rounded-full bg-info" />
-        <span>Urgency %</span>
+        <span>Priority Tickets</span>
       </button>
       <TooltipProvider>
         <UiTooltip>
@@ -124,43 +129,51 @@ const TrendsLegend = ({
             <button
               type="button"
               className="rounded-full text-muted-foreground hover:text-foreground"
-              aria-label="Avg urgency info"
+              aria-label="Priority tickets info"
             >
               <Info className="h-3 w-3" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
-            Urgency % = (average urgency score / 4) x 100 per time bucket.
+            Priority Tickets = High + Critical urgency tickets per time bucket.
           </TooltipContent>
         </UiTooltip>
       </TooltipProvider>
     </div>
-    <div className={`flex items-center gap-2 ${visibility.avgNegative ? 'text-foreground' : 'opacity-50'}`}>
-      <button
-        type="button"
-        onClick={() => onToggle('avgNegative')}
-        onMouseDown={(event) => event.stopPropagation()}
-        className="flex items-center gap-2 underline-offset-4 hover:underline"
+      <div
+        className={`flex items-center gap-2 ${
+          visibility.negativeTickets ? 'text-foreground' : 'opacity-50'
+        }`}
       >
-        <span className="h-2 w-2 rounded-full bg-destructive" />
-        <span>Negative %</span>
-      </button>
-      <TooltipProvider>
-        <UiTooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="rounded-full text-muted-foreground hover:text-foreground"
-              aria-label="Avg negative info"
-            >
-              <Info className="h-3 w-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
-            Negative % = (negative tickets / total tickets) x 100 per time bucket.
-          </TooltipContent>
-        </UiTooltip>
-      </TooltipProvider>
+        <button
+          type="button"
+          onClick={() => onToggle('negativeTickets')}
+          onMouseDown={(event) => event.stopPropagation()}
+          className="flex items-center gap-2 underline-offset-4 hover:underline"
+        >
+          <span className="h-2 w-2 rounded-full bg-destructive" />
+          <span>Negative Tickets</span>
+        </button>
+        <TooltipProvider>
+          <UiTooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full text-muted-foreground hover:text-foreground"
+                aria-label="Negative tickets info"
+              >
+                <Info className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-xs whitespace-normal">
+              Negative Tickets = Negative sentiment tickets per time bucket.
+            </TooltipContent>
+          </UiTooltip>
+        </TooltipProvider>
+      </div>
+    </div>
+    <div className="mt-1 flex justify-center">
+      <span className="text-xs font-semibold text-muted-foreground">Click legend to show/hide</span>
     </div>
   </div>
 );
@@ -194,8 +207,8 @@ function TrendsCardComponent({
   const [lastPresetRangeKey, setLastPresetRangeKey] = useState<TimeRangeKey>('7d');
   const [seriesVisibility, setSeriesVisibility] = useState({
     tickets: true,
-    avgUrgency: true,
-    avgNegative: true,
+    priorityTickets: true,
+    negativeTickets: true,
   });
   const [isExpanded, setIsExpanded] = useState(false);
   const selectedSource = sourceValue;
@@ -213,10 +226,10 @@ function TrendsCardComponent({
   const dragPixelEndRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  const toggleSeries = (key: 'tickets' | 'avgUrgency' | 'avgNegative') => {
+  const toggleSeries = (key: 'tickets' | 'priorityTickets' | 'negativeTickets') => {
     setSeriesVisibility((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      if (!next.tickets && !next.avgUrgency && !next.avgNegative) {
+      if (!next.tickets && !next.priorityTickets && !next.negativeTickets) {
         return prev;
       }
       return next;
@@ -300,6 +313,7 @@ function TrendsCardComponent({
       count: 0,
       urgencySum: 0,
       urgencyCount: 0,
+      urgentCount: 0,
       sentimentCount: 0,
       negativeCount: 0,
     }));
@@ -317,6 +331,9 @@ function TrendsCardComponent({
       if (urgencyValue !== null) {
         bucket.urgencySum += urgencyValue;
         bucket.urgencyCount += 1;
+        if (urgencyValue >= 3) {
+          bucket.urgentCount += 1;
+        }
       }
       const sentiment = entry.sentiment?.toLowerCase();
       if (sentiment) {
@@ -330,12 +347,8 @@ function TrendsCardComponent({
     const basePoints = buckets.map((bucket) => ({
       label: format(new Date(bucket.start), formatString),
       count: bucket.count,
-      avgUrgency: bucket.urgencyCount
-        ? (bucket.urgencySum / bucket.urgencyCount / 4) * 100
-        : null,
-      avgNegative: bucket.sentimentCount
-        ? (bucket.negativeCount / bucket.sentimentCount) * 100
-        : null,
+      priorityTickets: bucket.count ? bucket.urgentCount : null,
+      negativeTickets: bucket.count ? bucket.negativeCount : null,
       startMs: bucket.start,
       endMs: bucket.start + bucketMs,
     }));
@@ -666,14 +679,6 @@ function TrendsCardComponent({
               tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
               width={24}
             />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              domain={[0, 100]}
-              tick={{ fontSize: 10, fill: 'hsl(215, 20%, 55%)' }}
-              tickFormatter={(value) => `${value}%`}
-              width={24}
-            />
             <Tooltip content={<TrendsTooltip />} />
             {seriesVisibility.tickets && (
               <Line
@@ -688,12 +693,12 @@ function TrendsCardComponent({
                 isAnimationActive={false}
               />
             )}
-            {seriesVisibility.avgUrgency && (
+            {seriesVisibility.priorityTickets && (
               <Line
-                yAxisId="right"
+                yAxisId="left"
                 type="monotone"
-                dataKey="avgUrgency"
-                name="Urgency %"
+                dataKey="priorityTickets"
+                name="Priority Tickets"
                 stroke="hsl(199 89% 48%)"
                 strokeWidth={2}
                 dot={false}
@@ -702,12 +707,12 @@ function TrendsCardComponent({
                 isAnimationActive={false}
               />
             )}
-            {seriesVisibility.avgNegative && (
+            {seriesVisibility.negativeTickets && (
               <Line
-                yAxisId="right"
+                yAxisId="left"
                 type="monotone"
-                dataKey="avgNegative"
-                name="Negative %"
+                dataKey="negativeTickets"
+                name="Negative Tickets"
                 stroke="hsl(var(--destructive))"
                 strokeWidth={2}
                 dot={false}

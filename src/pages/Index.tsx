@@ -11,7 +11,7 @@ import { TrendsCard } from '@/components/dashboard/TrendsCard';
 import { issueTypeConfig, mockFeedback, FeedbackItem, FeedbackSource } from '@/data/mockFeedback';
 import { computeEmergingThemes } from '@/utils/emergingThemes';
 import { formatPercent } from '@/lib/kpiUtils';
-import { AlertTriangle, TrendingDown, TrendingUp, Info } from 'lucide-react';
+import { AlertTriangle, TrendingDown, TrendingUp, Info, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
@@ -605,11 +605,15 @@ const Index = () => {
                 filters={kpiFilters}
                 entries={baseFilteredItems}
                 prefilteredEntries={filteredFeedback}
+                isFiltering={isFiltering}
                 onSourceSelect={handleKpiSourceSelect}
                 extraCard={(issueTypesCard) => (
                   <div className="grid h-full grid-rows-[1fr_auto] gap-4">
                 <KpiCard
                   title="Critical Issues"
+                  titleRight={
+                    isFiltering ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null
+                  }
                   value={
                     <span className="flex items-center gap-2">
                       <span>{criticalPercent}</span>

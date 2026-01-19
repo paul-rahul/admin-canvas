@@ -12,6 +12,7 @@ interface KpiCardProps {
   tooltip?: React.ReactNode;
   trendBadge?: string;
   action?: React.ReactNode;
+  titleRight?: React.ReactNode;
   className?: string;
   children?: React.ReactNode;
   icon?: LucideIcon;
@@ -27,6 +28,7 @@ export function KpiCard({
   tooltip,
   trendBadge,
   action,
+  titleRight,
   className,
   children,
   icon: Icon,
@@ -64,6 +66,7 @@ export function KpiCard({
                 </Tooltip>
               </TooltipProvider>
             )}
+            {titleRight}
           </div>
           {isLoading ? (
             <Skeleton className="h-4 w-32" />

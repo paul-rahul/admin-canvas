@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { BarChart2, Info, ListChecks, TrendingDown, TrendingUp } from 'lucide-react';
+import { BarChart2, Info, ListChecks, Loader2, TrendingDown, TrendingUp } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDashboardKpis } from '@/hooks/useDashboardKpis';
@@ -16,6 +16,7 @@ interface KpiStripProps {
   secondaryCard?: React.ReactNode | null;
   onSourceSelect?: (source: string) => void;
   extraRightCard?: React.ReactNode;
+  isFiltering?: boolean;
 }
 
 function KpiStripComponent({
@@ -25,6 +26,7 @@ function KpiStripComponent({
   secondaryCard,
   onSourceSelect,
   extraRightCard,
+  isFiltering = false,
 }: KpiStripProps) {
   const entriesOverride = entries ? { items: entries, total: entries.length } : null;
   const { kpis, isLoading, error } = useDashboardKpis(filters, entriesOverride);
@@ -225,10 +227,13 @@ function KpiStripComponent({
 
   const issueTypesCard = (
     <KpiCard
-      title="Theme distribution"
+      title="Themes"
       value={null}
       isLoading={isLoading}
       icon={BarChart2}
+      titleRight={
+        isFiltering ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null
+      }
       valueHidden
       valueSpacerClassName="h-1"
     >
@@ -336,6 +341,9 @@ function KpiStripComponent({
             }
             isLoading={isLoading}
             icon={ListChecks}
+            titleRight={
+              isFiltering ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null
+            }
             tooltip={
               <div className="space-y-1 text-xs">
                 <p>• Total tickets = entries after Source and Time filters</p>
