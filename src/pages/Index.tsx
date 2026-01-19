@@ -369,12 +369,6 @@ const Index = () => {
     setLastUpdatedAt(new Date());
   }, [loadFeedback]);
 
-  const handleResolve = useCallback((id: string) => {
-    setFeedback((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, resolved: true } : item))
-    );
-    setSelectedItem(null);
-  }, []);
 
   const needsAttentionContent = useMemo(
     () => (
@@ -382,11 +376,124 @@ const Index = () => {
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Needs Attention Now</h3>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <AIInsights feedback={needsAttentionEntries} compact />
-          <div className="rounded-xl border border-border/60 p-4 md:col-start-1 md:row-start-2">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="rounded-xl border border-border/60 p-4">
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">Emerging Issues</h4>
+              <h4 className="text-sm font-semibold text-foreground">Active Alerts</h4>
+              <p className="text-xs text-muted-foreground">
+                Unresolved critical issues from the last 7 days.
+              </p>
+            </div>
+            {alerts.length ? (
+              <div className="space-y-3 max-h-[calc(6*88px+5*12px)] overflow-y-auto pr-1">
+                {alerts.map((alert) => {
+                  const severityClass =
+                    alert.severity === 'Critical'
+                      ? 'bg-destructive/20 text-destructive'
+                      : 'bg-warning/20 text-warning';
+                  const ownerLabel =
+                    alert.type === 'theme'
+                      ? getOwnerLabel(alert.id)
+                      : getOwnerLabel(alert.entry.issueType ?? '');
+                  const onClick = () => {
+                    if (alert.type === 'theme') {
+                      const themeLabel =
+                        issueTypeConfig[alert.id as keyof typeof issueTypeConfig]?.label ??
+                        alert.id;
+                      setSearchQuery(themeLabel);
+                    } else {
+                      setSearchQuery(alert.title);
+                      setSelectedItem(alert.entry);
+                    }
+                  };
+                  return (
+                    <TooltipProvider key={`${alert.type}-${alert.id}`}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={onClick}
+                            className="h-[88px] w-full rounded-lg border border-border/60 p-3 text-left transition hover:bg-muted/20"
+                          >
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                              <div className="min-w-0 space-y-1">
+                                <p className="text-sm font-semibold text-foreground truncate">
+                                  {alert.title}
+                                </p>
+                                <div className="text-xs text-muted-foreground">
+                                  Owner:{' '}
+                                  <span className="font-semibold text-foreground">{ownerLabel}</span>
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  Open since{' '}
+                                  <span className="font-semibold text-foreground">
+                                    {formatDistanceToNow(alert.entry.timestamp, {
+                                      addSuffix: false,
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <Badge className={`text-[10px] ${severityClass}`}>
+                                  {alert.severity}
+                                </Badge>
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-[10px] text-primary-foreground ${
+                                    issueTypeConfig[
+                                      alert.entry.issueType as keyof typeof issueTypeConfig
+                                    ]?.color ?? ''
+                                  }`}
+                                >
+                                  {issueTypeConfig[
+                                    alert.entry.issueType as keyof typeof issueTypeConfig
+                                  ]?.label ?? alert.entry.issueType}
+                                </Badge>
+                              </div>
+                            </div>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {alert.reason} compared to the previous period.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
+                No alerts triggered in the current window.
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <AIInsights feedback={needsAttentionEntries} compact />
+            <div className="rounded-xl border border-border/60 p-4">
+            <div className="mb-3">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-foreground">Emerging Issues</h4>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="rounded-full text-muted-foreground hover:text-foreground"
+                        aria-label="Emerging issues info"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs">
+                      <div className="space-y-1">
+                        <p>• Emerging if mentions rise or urgency increases meaningfully.</p>
+                        <p>• Δ urgency = avg urgency (current) − avg urgency (previous).</p>
+                        <p>• % Negative compares negative ratio now vs previous window.</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <p className="text-xs text-muted-foreground">Last 7 days only.</p>
             </div>
             {needsAttentionEmerging.length ? (
@@ -454,96 +561,7 @@ const Index = () => {
                 No emerging issues in the current window.
               </div>
             )}
-          </div>
-          <div className="rounded-xl border border-border/60 p-4 md:col-start-2 md:row-start-1">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">Active Alerts</h4>
-              <p className="text-xs text-muted-foreground">
-                Unresolved critical issues from the last 7 days.
-              </p>
             </div>
-            {alerts.length ? (
-              <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-                {alerts.map((alert) => {
-                  const severityClass =
-                    alert.severity === 'Critical'
-                      ? 'bg-destructive/20 text-destructive'
-                      : 'bg-warning/20 text-warning';
-                  const ownerLabel =
-                    alert.type === 'theme'
-                      ? getOwnerLabel(alert.id)
-                      : getOwnerLabel(alert.entry.issueType ?? '');
-                  const onClick = () => {
-                    if (alert.type === 'theme') {
-                      const themeLabel =
-                        issueTypeConfig[alert.id as keyof typeof issueTypeConfig]?.label ??
-                        alert.id;
-                      setSearchQuery(themeLabel);
-                    } else {
-                      setSearchQuery(alert.title);
-                      setSelectedItem(alert.entry);
-                    }
-                  };
-                  return (
-                    <TooltipProvider key={`${alert.type}-${alert.id}`}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={onClick}
-                            className="w-full rounded-lg border border-border/60 p-3 text-left transition hover:bg-muted/20"
-                          >
-                            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                              <div className="min-w-0 space-y-1">
-                                <p className="text-sm font-semibold text-foreground truncate">
-                                  {alert.title}
-                                </p>
-                                <div className="text-xs text-muted-foreground">
-                                  Owner:{' '}
-                                  <span className="font-semibold text-foreground">{ownerLabel}</span>
-                                </div>
-                                <div className="text-[11px] text-muted-foreground">
-                                  Open since{' '}
-                                  <span className="font-semibold text-foreground">
-                                    {formatDistanceToNow(alert.entry.timestamp, {
-                                      addSuffix: false,
-                                    })}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-1">
-                                <Badge className={`text-[10px] ${severityClass}`}>
-                                  {alert.severity}
-                                </Badge>
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-[10px] text-primary-foreground ${
-                                    issueTypeConfig[
-                                      alert.entry.issueType as keyof typeof issueTypeConfig
-                                    ]?.color ?? ''
-                                  }`}
-                                >
-                                  {issueTypeConfig[
-                                    alert.entry.issueType as keyof typeof issueTypeConfig
-                                  ]?.label ?? alert.entry.issueType}
-                                </Badge>
-                              </div>
-                            </div>
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          {alert.reason} compared to the previous period.
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground">
-                No alerts triggered in the current window.
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -690,7 +708,6 @@ const Index = () => {
       <FeedbackDetail
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
-        onResolve={handleResolve}
       />
       <IssueTrendModal
         open={isTrendOpen}

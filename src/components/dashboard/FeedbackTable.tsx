@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -31,6 +32,7 @@ import {
   Filter as FilterIcon,
   Github,
   Headphones,
+  Info,
   Mail,
   MessageCircle,
   Plus,
@@ -99,6 +101,12 @@ const ISSUE_TYPE_OPTIONS = [
   { value: 'pricing', label: 'Pricing' },
   { value: 'documentation', label: 'Docs' },
 ];
+const PRIORITY_OPTIONS = [
+  { value: 'p0', label: 'P0' },
+  { value: 'p1', label: 'P1' },
+  { value: 'p2', label: 'P2' },
+  { value: 'p3', label: 'P3' },
+];
 const OWNER_OPTIONS = [
   { value: 'product', label: 'Product' },
   { value: 'engineering', label: 'Engineering' },
@@ -127,6 +135,7 @@ const TIME_PRESETS = [
 const SORT_OPTIONS = [
   { value: 'created', label: 'Creation Date' },
   { value: 'updated', label: 'Last Updated' },
+  { value: 'priority', label: 'Priority' },
   { value: 'urgency', label: 'Urgency' },
   { value: 'sentiment', label: 'Sentiment' },
 ];
@@ -136,6 +145,7 @@ const CLEAR_FILTERS: TableFilters = {
   urgencies: [],
   urgencyHighPlus: false,
   issueTypes: [],
+  priorityBands: [],
   owners: [],
   segments: [],
   statuses: [],
@@ -482,6 +492,7 @@ function FeedbackTableComponent({
     isSameList(filters.urgencies, appliedDefaultFilters.urgencies) &&
     filters.urgencyHighPlus === appliedDefaultFilters.urgencyHighPlus &&
     isSameList(filters.issueTypes, appliedDefaultFilters.issueTypes) &&
+    isSameList(filters.priorityBands, appliedDefaultFilters.priorityBands) &&
     isSameList(filters.owners, appliedDefaultFilters.owners) &&
     isSameList(filters.segments, appliedDefaultFilters.segments) &&
     isSameList(filters.statuses, appliedDefaultFilters.statuses) &&
@@ -496,8 +507,9 @@ function FeedbackTableComponent({
     filters.sentiments.length ? 'Sentiment' : null,
     filters.urgencyHighPlus || filters.urgencies.length ? 'Urgency' : null,
     filters.issueTypes.length ? 'Issue Type' : null,
+    filters.priorityBands.length ? 'Priority' : null,
     filters.owners.length ? 'Owner' : null,
-    filters.segments.length ? 'Segment' : null,
+    filters.segments.length ? 'User Type' : null,
     filters.statuses.length ? 'Status' : null,
     filters.tags.length ? 'Tags' : null,
     filters.timePreset !== 'all' || filters.startDate || filters.endDate
@@ -592,6 +604,18 @@ function FeedbackTableComponent({
           .join(', ');
     chips.push({ key: 'issueTypes', label: `Issue Type: ${label}` });
   }
+  if (filters.priorityBands.length) {
+    const label = allSelected(filters.priorityBands, PRIORITY_OPTIONS.map((option) => option.value))
+      ? 'All'
+      : filters.priorityBands
+          .map(
+            (value) =>
+              PRIORITY_OPTIONS.find((option) => option.value === value)?.label ??
+              formatFilterLabel(value)
+          )
+          .join(', ');
+    chips.push({ key: 'priorityBands', label: `Priority: ${label}` });
+  }
   if (filters.owners.length) {
     const label = allSelected(
       filters.owners,
@@ -613,7 +637,7 @@ function FeedbackTableComponent({
               formatFilterLabel(value)
           )
           .join(', ');
-    chips.push({ key: 'segments', label: `Segment: ${label}` });
+    chips.push({ key: 'segments', label: `User Type: ${label}` });
   }
   if (filters.statuses.length) {
     const label = allSelected(
@@ -651,6 +675,7 @@ function FeedbackTableComponent({
     | 'sentiments'
     | 'urgencies'
     | 'issueTypes'
+    | 'priorityBands'
     | 'owners'
     | 'segments'
     | 'statuses'
@@ -706,6 +731,7 @@ function FeedbackTableComponent({
       | 'sentiments'
       | 'urgencies'
       | 'issueTypes'
+      | 'priorityBands'
       | 'owners'
       | 'segments'
       | 'statuses'
@@ -724,6 +750,7 @@ function FeedbackTableComponent({
       | 'sentiments'
       | 'urgencies'
       | 'issueTypes'
+      | 'priorityBands'
       | 'owners'
       | 'segments'
       | 'statuses'
@@ -773,7 +800,7 @@ function FeedbackTableComponent({
       <Accordion type="multiple" className="max-h-[440px] overflow-y-auto pr-1">
         <AccordionItem value="time" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Time</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Time</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {draftFilters.timePreset === 'custom'
                 ? 'Custom'
@@ -895,7 +922,7 @@ function FeedbackTableComponent({
         </AccordionItem>
         <AccordionItem value="source" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Source</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Source</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {selectionSummary(
                 draftFilters.sources,
@@ -940,7 +967,7 @@ function FeedbackTableComponent({
         </AccordionItem>
         <AccordionItem value="sentiment" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Sentiment</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Sentiment</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {selectionSummary(
                 draftFilters.sentiments,
@@ -985,7 +1012,7 @@ function FeedbackTableComponent({
         </AccordionItem>
         <AccordionItem value="urgency" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Urgency</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Urgency</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {draftFilters.urgencyHighPlus
                 ? 'High+'
@@ -1049,7 +1076,7 @@ function FeedbackTableComponent({
         </AccordionItem>
         <AccordionItem value="issueType" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Issue Type</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Issue Type</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {selectionSummary(
                 draftFilters.issueTypes,
@@ -1111,9 +1138,54 @@ function FeedbackTableComponent({
             </div>
           </AccordionContent>
         </AccordionItem>
+        <AccordionItem value="priority" className="border-b border-border/60">
+          <AccordionTrigger className="py-2 text-sm">
+            <span className="inline-flex w-[110px] whitespace-nowrap">Priority</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {selectionSummary(
+                draftFilters.priorityBands,
+                PRIORITY_OPTIONS.map((option) => option.value),
+                (value) => PRIORITY_OPTIONS.find((option) => option.value === value)?.label ?? value
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 space-y-2">
+                {PRIORITY_OPTIONS.map((option) => (
+                  <label key={option.value} className={filterRowClass}>
+                    <Checkbox
+                      checked={draftFilters.priorityBands.includes(option.value)}
+                      onCheckedChange={() => toggleFilterValue('priorityBands', option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="w-[96px] shrink-0 space-y-2 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectAllOptions('priorityBands', PRIORITY_OPTIONS.map((option) => option.value))
+                  }
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearAllOptions('priorityBands')}
+                  className="text-xs font-medium text-primary hover:text-primary/80 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
         <AccordionItem value="owner" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Owner</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Owner</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {selectionSummary(
                 draftFilters.owners,
@@ -1158,7 +1230,7 @@ function FeedbackTableComponent({
         </AccordionItem>
         <AccordionItem value="segment" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Segment</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">User Type</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {selectionSummary(
                 draftFilters.segments,
@@ -1203,7 +1275,7 @@ function FeedbackTableComponent({
         </AccordionItem>
         <AccordionItem value="status" className="border-b border-border/60">
           <AccordionTrigger className="py-2 text-sm">
-            <span className="inline-flex w-[88px]">Status</span>
+            <span className="inline-flex w-[110px] whitespace-nowrap">Status</span>
             <span className="ml-2 text-xs text-muted-foreground">
               {selectionSummary(
                 draftFilters.statuses,
@@ -1357,22 +1429,26 @@ function FeedbackTableComponent({
                     'Source',
                     'Description',
                     'Sentiment',
+                    'Priority',
                     'Urgency',
+                    'User Type',
                     'Issue Type',
                     'Owner',
-                    'Time Created',
-                    'Last Updated',
+                    'Created',
+                    'Updated',
                     'Status',
                     'External Ref',
                     'External Url',
-                    'Customer Segment',
+                    'User Type',
                     'Tags',
                   ];
                   const rows = sortedFeedback.map((item) => [
                     item.source,
                     item.title,
                     item.sentiment,
+                    item.priorityScore ?? '',
                     item.urgency,
+                    formatFilterLabel(item.customerSegment ?? 'unknown'),
                     issueTypeConfig[item.issueType as keyof typeof issueTypeConfig]?.label ?? item.issueType,
                     formatFilterLabel(normalizeOwner(item)),
                     item.createdAt ?? '',
@@ -1436,6 +1512,10 @@ function FeedbackTableComponent({
                     if (chip.key === 'issueTypes') {
                       setFilters((prev) => ({ ...prev, issueTypes: [] }));
                       setDraftFilters((prev) => ({ ...prev, issueTypes: [] }));
+                    }
+                    if (chip.key === 'priorityBands') {
+                      setFilters((prev) => ({ ...prev, priorityBands: [] }));
+                      setDraftFilters((prev) => ({ ...prev, priorityBands: [] }));
                     }
                     if (chip.key === 'owners') {
                       setFilters((prev) => ({ ...prev, owners: [] }));
@@ -1515,16 +1595,79 @@ function FeedbackTableComponent({
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
-              <th className="w-[64px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Source</th>
+              <th className="w-[64px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Source</th>
               <th className="w-[240px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
-              <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
-              <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Urgency</th>
-              <th className="w-[120px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Type</th>
-              <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</th>
-              <th className="w-[120px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Time Created</th>
-              <th className="w-[110px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Last Updated</th>
-              <th className="w-[90px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-              <th className="w-[70px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Link/Ref</th>
+              <th className="w-[90px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
+              <th className="w-[90px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1">
+                  Priority
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded-full text-muted-foreground hover:text-foreground"
+                          aria-label="Priority info"
+                        >
+                          <Info className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-none whitespace-nowrap">
+                        <div className="space-y-1 text-xs">
+                          <p>• PriorityScore = urgency + sentiment + status + recency + segment</p>
+                          <div className="pl-3 space-y-1">
+                            <p>• Urgency: Critical 40, High 28, Medium 16, Low 8</p>
+                            <p>• Sentiment: Negative 18, Neutral 8, Positive 0</p>
+                            <p>• Status: Unresolved 12, In Progress 6, Resolved/Ignored 0</p>
+                            <p>• Recency: up to +15 (last 72h, tapering to 0 by 30d)</p>
+                            <p>• Enterprise segment: +8</p>
+                          </div>
+                          <div className="pt-1">
+                            <p>• Score mapping</p>
+                            <div className="pl-3">
+                              <p>• P0: 80–100</p>
+                              <p>• P1: 60–79</p>
+                              <p>• P2: 40–59</p>
+                              <p>• P3: 0–39</p>
+                            </div>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </span>
+              </th>
+              <th className="w-[90px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1">
+                  Urgency
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded-full text-muted-foreground hover:text-foreground"
+                          aria-label="Urgency info"
+                        >
+                          <Info className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-none whitespace-nowrap">
+                        <div className="space-y-1 text-xs">
+                          <p>• Urgency reflects the ticket’s severity label</p>
+                          <p>• Ordered: Critical &gt; High &gt; Medium &gt; Low</p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </span>
+              </th>
+              <th className="w-[130px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">User Type</th>
+              <th className="w-[120px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Type</th>
+              <th className="w-[110px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</th>
+              <th className="w-[120px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Created</th>
+              <th className="w-[110px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Updated</th>
+              <th className="w-[90px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+              <th className="w-[70px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Link</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/30">
@@ -1537,6 +1680,17 @@ function FeedbackTableComponent({
                 issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
               const ownerLabel = formatFilterLabel(normalizeOwner(item));
               const statusLabel = formatFilterLabel(normalizeStatus(item));
+              const priorityScore = item.priorityScore ?? 0;
+              const priorityLabel =
+                priorityScore >= 80 ? 'P0' : priorityScore >= 60 ? 'P1' : priorityScore >= 40 ? 'P2' : 'P3';
+              const priorityClass =
+                priorityLabel === 'P0'
+                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  : priorityLabel === 'P1'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : priorityLabel === 'P2'
+                  ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                  : 'bg-slate-500/15 text-slate-300 border-slate-500/30';
               const statusValue = normalizeStatus(item);
               const statusBadgeClass =
                 statusValue === 'resolved'
@@ -1557,7 +1711,7 @@ function FeedbackTableComponent({
                   onClick={() => onSelect?.(item)}
                   className="hover:bg-muted/20 transition-colors cursor-pointer"
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     <div className={cn("p-2 rounded-lg w-fit", sourceConf.color)}>
                       <IconComponent className="h-4 w-4 text-primary-foreground" />
                     </div>
@@ -1568,12 +1722,21 @@ function FeedbackTableComponent({
                       <p className="text-xs text-muted-foreground truncate">{item.author}</p>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     <span className={cn("text-sm font-medium capitalize truncate", sentimentConf.color)}>
                       {item.sentiment}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
+                    <Badge
+                      variant="outline"
+                      className={cn("capitalize border text-[10px] whitespace-nowrap", priorityClass)}
+                      title={`Priority score: ${priorityScore}`}
+                    >
+                      {priorityLabel}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     <Badge 
                       variant="outline" 
                       className={cn(
@@ -1585,32 +1748,49 @@ function FeedbackTableComponent({
                       {item.urgency}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "capitalize text-[10px] whitespace-nowrap",
-                      issueTypeConf.color,
+                  <td className="px-4 py-3 text-center">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "capitalize text-[10px] whitespace-nowrap border",
+                        item.customerSegment === 'enterprise'
+                          ? 'bg-primary/15 text-primary border-primary/30'
+                          : item.customerSegment === 'pro'
+                          ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                          : item.customerSegment === 'free'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-slate-500/15 text-slate-300 border-slate-500/30'
+                      )}
+                    >
+                      {formatFilterLabel(item.customerSegment ?? 'unknown')}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "capitalize text-[10px] whitespace-nowrap",
+                        issueTypeConf.color,
                       "text-primary-foreground"
                     )}
                   >
                     {issueTypeConf.label}
                   </Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     <span className="text-xs text-muted-foreground truncate">{ownerLabel}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     <span className="text-xs text-muted-foreground truncate">
                       {formatShortRelative(createdDate)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     <span className="text-xs text-muted-foreground truncate">
                       {formatShortRelative(updatedDate)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                   <Badge
                     variant="outline"
                     className={cn("capitalize border text-[10px] whitespace-nowrap", statusBadgeClass)}
@@ -1618,12 +1798,12 @@ function FeedbackTableComponent({
                     {statusLabel}
                   </Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     {item.externalUrl ? (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-7 w-7 mx-auto"
                         title={item.externalRef ?? 'Open source'}
                         onClick={(event) => {
                           event.stopPropagation();

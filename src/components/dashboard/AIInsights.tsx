@@ -102,7 +102,7 @@ function AIInsightsComponent({ feedback, compact = false }: AIInsightsProps) {
   }, []);
 
   return (
-    <div className="glass rounded-xl p-6 shadow-card h-full">
+    <div className="glass rounded-xl p-6 shadow-card self-start">
       <div className="flex items-center gap-2 mb-4">
         <div className="p-1.5 rounded-lg gradient-primary">
           <Sparkles className="h-4 w-4 text-primary-foreground" />

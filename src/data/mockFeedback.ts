@@ -49,6 +49,9 @@ export interface TicketRecord {
   priorityScore: number;
   externalRef?: string;
   externalUrl?: string;
+  jiraKey?: string;
+  jiraUrl?: string;
+  mediaUrl?: string;
   resolution?: Resolution;
   author: string;
 }
@@ -281,12 +284,13 @@ const pickUpdatedAtMs = (
   return Math.max(createdAtMs, updatedAt);
 };
 
+const randomId = (rng: () => number, min: number, max: number) =>
+  Math.floor(min + rng() * (max - min + 1));
+
 const buildExternalMeta = (rng: () => number, source: FeedbackSource) => {
-  const randomId = (min: number, max: number) =>
-    Math.floor(min + rng() * (max - min + 1));
   if (source === 'github') {
     if (rng() > 0.85) return {};
-    const id = randomId(1000, 999999);
+    const id = randomId(rng, 1000, 999999);
     return {
       externalRef: `GH-${id}`,
       externalUrl: `https://github.com/cloudflare/demo/issues/${id}`,
@@ -294,7 +298,7 @@ const buildExternalMeta = (rng: () => number, source: FeedbackSource) => {
   }
   if (source === 'support') {
     if (rng() > 0.8) return {};
-    const id = randomId(10000, 999999);
+    const id = randomId(rng, 10000, 999999);
     return {
       externalRef: `ZD-${id}`,
       externalUrl: `https://support.zendesk.com/agent/tickets/${id}`,
@@ -302,20 +306,26 @@ const buildExternalMeta = (rng: () => number, source: FeedbackSource) => {
   }
   if (source === 'twitter') {
     if (rng() > 0.75) return {};
-    const id = randomId(1000000, 9999999);
+    const id = randomId(rng, 1000000, 9999999);
     return {
       externalRef: `TW-${id}`,
       externalUrl: `https://x.com/cloudflare/status/${id}`,
     };
   }
   if (rng() < 0.25) {
-    const id = randomId(1000, 999999);
+    const id = randomId(rng, 1000, 999999);
     return {
       externalRef: `EXT-${id}`,
       externalUrl: `https://example.com/tickets/${id}`,
     };
   }
   return {};
+};
+
+const buildMediaUrl = (rng: () => number) => {
+  if (rng() > 0.18) return undefined;
+  const id = randomId(rng, 1000, 9999);
+  return `https://media.example.com/assets/${id}.png`;
 };
 
 const buildResolution = (
@@ -389,6 +399,9 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
     24 * 60 * 60 * 1000
   );
   const externalMeta = buildExternalMeta(rng, old.source);
+  const jiraKey = `CB-${randomId(rng, 1000, 9999)}`;
+  const jiraUrl = `https://jira.example.com/browse/${jiraKey}`;
+  const mediaUrl = buildMediaUrl(rng);
   const resolution = buildResolution(rng, old.status, createdAtMs, updatedAtMs, 24 * 60 * 60 * 1000);
   return {
     id: old.id,
@@ -408,6 +421,9 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
     priorityScore,
     externalRef: externalMeta.externalRef,
     externalUrl: externalMeta.externalUrl,
+    jiraKey,
+    jiraUrl,
+    mediaUrl,
     resolution,
     author: old.author,
   };

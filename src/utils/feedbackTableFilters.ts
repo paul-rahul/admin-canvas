@@ -8,6 +8,7 @@ export type TableFilters = {
   urgencies: string[];
   urgencyHighPlus: boolean;
   issueTypes: string[];
+  priorityBands: string[];
   owners: string[];
   segments: string[];
   statuses: string[];
@@ -26,6 +27,7 @@ export const DEFAULT_FILTERS: TableFilters = {
   urgencies: [],
   urgencyHighPlus: false,
   issueTypes: [],
+  priorityBands: [],
   owners: [],
   segments: [],
   statuses: DEFAULT_STATUSES,
@@ -102,6 +104,7 @@ export const parseFiltersFromSearch = (search: string) => {
   const sentiments = parseListParam(params.get('sentiment'));
   const urgencies = parseListParam(params.get('urgency'));
   const issueTypes = parseListParam(params.get('issueTypes'));
+  const priorityBands = parseListParam(params.get('priority'));
   const owners = parseListParam(params.get('owners'));
   const segments = parseListParam(params.get('segments'));
   const statuses = parseListParam(params.get('status'));
@@ -115,6 +118,7 @@ export const parseFiltersFromSearch = (search: string) => {
     sentiments,
     urgencies,
     issueTypes,
+    priorityBands,
     owners,
     segments,
     statuses: statuses.length ? statuses : DEFAULT_STATUSES,
@@ -150,6 +154,7 @@ export const serializeFiltersToSearch = (filters: TableFilters, now = new Date()
     pushList('urgency', filters.urgencies);
   }
   pushList('issueTypes', filters.issueTypes);
+  pushList('priority', filters.priorityBands);
   pushList('owners', filters.owners);
   pushList('segments', filters.segments);
   if (filters.statuses.length && sortedStatuses.join(',') !== defaultStatuses.join(',')) {
@@ -228,6 +233,12 @@ export const applyFilters = (entries: FeedbackItem[], filters: TableFilters, now
     if (filters.sentiments.length && !filters.sentiments.includes(item.sentiment)) return false;
     if (effectiveUrgencies.length && !effectiveUrgencies.includes(item.urgency)) return false;
     if (filters.issueTypes.length && !filters.issueTypes.includes(item.issueType)) return false;
+    if (filters.priorityBands.length) {
+      const score = item.priorityScore ?? 0;
+      const band =
+        score >= 80 ? 'p0' : score >= 60 ? 'p1' : score >= 40 ? 'p2' : 'p3';
+      if (!filters.priorityBands.includes(band)) return false;
+    }
     const owner = normalizeOwner(item);
     if (filters.owners.length && !filters.owners.includes(owner)) return false;
     const segment = (item.customerSegment ?? 'unknown').toLowerCase();

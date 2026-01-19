@@ -5,7 +5,12 @@ import { cn } from "@/lib/utils";
 
 const TooltipProvider = TooltipPrimitive.Provider;
 
-const Tooltip = TooltipPrimitive.Root;
+const Tooltip = ({
+  disableHoverableContent = false,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Root>) => (
+  <TooltipPrimitive.Root disableHoverableContent={disableHoverableContent} {...props} />
+);
 
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
