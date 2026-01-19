@@ -34,7 +34,9 @@ export const applyEntryFilters = (entries: Entry[], filters: KpiFilters) => {
     const entrySource = normalize(entry.source);
     const entryUrgency = normalize(entry.urgency);
     const entrySentiment = normalize(entry.sentiment);
-    const entryTimestamp = parseTimestamp(entry.timestamp);
+    const entryTimestamp = parseTimestamp(
+      (entry as { createdAt?: string }).createdAt ?? entry.timestamp
+    );
     const entryText = `${entry.title ?? ''} ${entry.content ?? ''} ${entry.author ?? ''}`.toLowerCase();
 
     if (source && entrySource !== source) return false;

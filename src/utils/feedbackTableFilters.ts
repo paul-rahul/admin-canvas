@@ -239,8 +239,8 @@ export const applyFilters = (entries: FeedbackItem[], filters: TableFilters, now
       if (!filters.tags.some((tag) => tags.includes(tag))) return false;
     }
     if (startMs !== null || endMs !== null) {
-      const updatedAt = item.updatedAt ?? item.createdAt;
-      const timestamp = updatedAt ? new Date(updatedAt).getTime() : item.timestamp?.getTime?.() ?? null;
+      const createdAt = item.createdAt;
+      const timestamp = createdAt ? new Date(createdAt).getTime() : item.timestamp?.getTime?.() ?? null;
       if (timestamp === null) return false;
       if (startMs !== null && timestamp < startMs) return false;
       if (endMs !== null && timestamp > endMs) return false;

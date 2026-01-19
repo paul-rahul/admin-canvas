@@ -403,6 +403,18 @@ function FeedbackTableComponent({
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
+  const formatShortRelative = (date: Date | null) => {
+    if (!date) return '—';
+    const diffMs = Date.now() - date.getTime();
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (diffMs < minute) return 'now';
+    if (diffMs < hour) return `${Math.round(diffMs / minute)}m ago`;
+    if (diffMs < day) return `${Math.round(diffMs / hour)}h ago`;
+    if (diffMs < 30 * day) return `${Math.round(diffMs / day)}d ago`;
+    return `${Math.round(diffMs / (30 * day))}mo ago`;
+  };
   const formatTime = (value: Date | null) => {
     if (!value) return '';
     const pad = (num: number) => String(num).padStart(2, '0');
@@ -1525,6 +1537,15 @@ function FeedbackTableComponent({
                 issueTypeConfig[item.issueType] ?? { label: 'Unknown', color: 'bg-muted-foreground' };
               const ownerLabel = formatFilterLabel(normalizeOwner(item));
               const statusLabel = formatFilterLabel(normalizeStatus(item));
+              const statusValue = normalizeStatus(item);
+              const statusBadgeClass =
+                statusValue === 'resolved'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : statusValue === 'in_progress'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : statusValue === 'ignored'
+                  ? 'bg-slate-500/15 text-slate-300 border-slate-500/30'
+                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
               const createdAt = item.createdAt ?? null;
               const createdDate = createdAt ? new Date(createdAt) : null;
               const updatedAt = item.updatedAt ?? item.createdAt;
@@ -1565,39 +1586,37 @@ function FeedbackTableComponent({
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge 
-                      variant="secondary"
-                      className={cn("capitalize", issueTypeConf.color, "text-primary-foreground")}
-                    >
-                      {issueTypeConf.label}
-                    </Badge>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "capitalize text-[10px] whitespace-nowrap",
+                      issueTypeConf.color,
+                      "text-primary-foreground"
+                    )}
+                  >
+                    {issueTypeConf.label}
+                  </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground truncate">{ownerLabel}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground truncate">
-                      {createdDate
-                        ? formatDistanceToNow(createdDate, { addSuffix: true })
-                        : '—'}
+                      {formatShortRelative(createdDate)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground truncate">
-                      {updatedDate
-                        ? formatDistanceToNow(updatedDate, { addSuffix: true })
-                        : '—'}
+                      {formatShortRelative(updatedDate)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {item.resolved ? (
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                      ) : (
-                        <div className="h-2 w-2 rounded-full bg-warning animate-pulse" />
-                      )}
-                      <span className="text-xs text-muted-foreground truncate">{statusLabel}</span>
-                    </div>
+                  <Badge
+                    variant="outline"
+                    className={cn("capitalize border text-[10px] whitespace-nowrap", statusBadgeClass)}
+                  >
+                    {statusLabel}
+                  </Badge>
                   </td>
                   <td className="px-4 py-3">
                     {item.externalUrl ? (
