@@ -1,353 +1,363 @@
 # Project Overview
-- Project name: admin-canvas (Feedback Hub)
-- One-line goal: A client-side analytics dashboard for product feedback with KPI cards, trends, filters, and AI insight overlays backed by mock data and Cloudflare Pages/Workers endpoints.
+- Project name: Cerebro
+- One-line goal: A product feedback dashboard with an Overview (triage) page and a PM Metrics page for longitudinal product health signals, backed by mock data and Cloudflare Workers/Pages APIs.
 - Explicit non-goals / out-of-scope items:
-  - No real third-party integrations (data is mock or Cloudflare AI fallback only).
-  - No authentication or user management.
-  - No server-side rendering (SPA only).
-  - No persistent CRUD UI for feedback items.
-  - No production analytics pipeline; D1 is used only for demo metrics writes.
+  - No real third-party integrations (all data is mock in this codebase).
+  - No authentication or user accounts.
+  - No backend persistence for feedback items beyond mock data (D1 is only used for metrics seed/demo).
 
 # Tech Stack
-- Language(s): TypeScript, JavaScript, SQL (D1 migrations)
-- Framework(s): React 18, Vite
+- Language(s): TypeScript, SQL (D1 migration/seed)
+- Framework(s): React 18, Vite 5
 - Libraries / SDKs:
-  - UI: Tailwind CSS, shadcn/ui (Radix UI), lucide-react
+  - UI: Tailwind CSS, shadcn/ui (Radix UI primitives), lucide-react
   - Charts: Recharts
-  - Date utilities: date-fns, react-day-picker
-  - State/data: React Query (setup only), React Router
-  - Form/tools: react-hook-form, zod
-  - Others: class-variance-authority, clsx, tailwind-merge
-- Database / storage:
-  - Cloudflare D1 (metrics writes in Pages Functions and Worker)
-- Infrastructure / hosting:
-  - Cloudflare Pages Functions (functions/api/*)
-  - Cloudflare Worker (src/worker.ts) with assets binding
-  - Wrangler (wrangler.toml)
+  - Data/query: @tanstack/react-query
+  - Dates: date-fns
+  - Forms/validation: react-hook-form, zod
+  - Testing: Vitest, @testing-library/react
+- Database / storage: Cloudflare D1 (metrics table only), mock data in `src/data/mockFeedback.ts`
+- Infrastructure / hosting: Cloudflare Workers + Pages Functions (see `src/worker.ts` and `functions/api/*`), Vite dev server
 - Auth (if any): None
-- AI / ML components (if any): Cloudflare Workers AI (`@cf/meta/llama-3-8b-instruct`) used in `/api/insights` (fallback to static insights if not available)
+- AI / ML components (if any): Cloudflare Workers AI via `env.AI` in `src/worker.ts` and `functions/api/insights.ts`
 
 # Architecture
 - High-level components:
-  - SPA frontend (React) for dashboard UI and interactions.
-  - Mock data generator used by frontend and API handlers.
-  - Cloudflare Pages Functions for `/api/feedback`, `/api/metrics`, `/api/insights`.
-  - Optional Worker (`src/worker.ts`) implementing similar endpoints and static asset fallback.
+  - Frontend SPA (React/Vite) with routes: Overview (`/`), PM Metrics (`/pm-metrics`), Themes (`/themes`), NotFound
+  - Shared topbar (`Header`) with refresh, bell overlay (Needs Attention), nav links
+  - Mock data generator and schema (`src/data/mockFeedback.ts`)
+  - Filtering logic for View Tickets (`src/utils/feedbackTableFilters.ts`)
+  - Needs Attention overlay logic (`src/components/dashboard/NeedsAttentionOverlay.tsx`)
+  - Cloudflare Pages Functions endpoints (`functions/api/*`)
+  - Cloudflare Worker (`src/worker.ts`) that serves APIs and assets
 - Responsibility of each component:
-  - `src/pages/Index.tsx`: main dashboard orchestration, state/filters, KPIs, Trends chart, overlays.
-  - `src/components/dashboard/*`: visual components for KPIs, trends, filters, tables, overlays.
-  - `src/data/mockFeedback.ts`: mock data generator and config dictionaries for sources/urgency/sentiment/issue types.
-  - `functions/api/*`: Pages Functions serving JSON using mock data, writing metrics to D1, and invoking Workers AI.
-  - `src/worker.ts`: standalone Worker implementing the same API and serving static assets.
+  - `Header`: topbar UI, refresh button, alert bell overlay positioning
+  - `NeedsAttentionOverlay`: renders Active Alerts + Emerging Issues + AI Insights overlay content
+  - `FeedbackTable`: View Tickets table, local filters, sorting, CSV export, ticket detail modal
+  - `TrendsCard`: Trends chart (absolute counts) with selection/toggle
+  - `KpiStrip`: KPI cards row on Overview
+  - `PmMetrics`: PM Metrics dashboard with KPI row + charts/lists
+  - `mockFeedback`: generates ~6000 tickets with enriched schema
+  - `feedbackTableFilters`: filter state, URL parsing/serialization, client-side predicate
+  - `functions/api/*` and `src/worker.ts`: API endpoints returning mock feedback/metrics/insights, optional Workers AI
 - End-to-end data flow (step-by-step):
-  1) App mounts at `/` (`src/pages/Index.tsx`).
-  2) `loadFeedback()` fetches `/api/feedback`; if it fails, falls back to `mockFeedback`.
-  3) Feedback entries are indexed (lowercased search text + timestampMs) for faster filtering.
-  4) Global filters (Source/Time/Search) update `filteredFeedback`, which drives the KPI strip, table, and trend charts.
-  5) Trends chart uses local time granularity synced to global time filter and can apply custom range via drag selection.
-  6) Clicking AI Insights button opens an overlay over the Trends chart and renders `AIInsights` + `EmergingThemesCard` inside.
-  7) Pages Functions endpoints return JSON and (for `/api/metrics`) update D1.
+  1. UI loads a page (`Index`, `PmMetrics`, etc.).
+  2. Pages call `/api/feedback` (via fetch) to retrieve serialized `FeedbackItem` objects.
+  3. Client deserializes `timestamp` into `Date` and uses `createdAt`/`updatedAt` for filtering/sorting.
+  4. Overview uses filters to compute KPIs and trends; View Tickets uses `applyFilters`.
+  5. Needs Attention overlay uses `buildNeedsAttentionData` on in-memory feedback.
+  6. Optional APIs: `/api/metrics` and `/api/insights` compute metrics/insights (Workers AI if configured).
+  7. Worker (`src/worker.ts`) routes API requests and serves static assets.
 - External integrations (APIs, services, webhooks):
-  - Cloudflare Workers AI binding used in `functions/api/insights.ts` and `src/worker.ts` (if configured).
-  - D1 database binding `ANALYTICS_DB` used in `functions/api/metrics.ts` and `src/worker.ts`.
-  - `/api/themes` and `/api/trends` are referenced by `apiClient` but not implemented in this repo (expected to return null/404).
+  - Cloudflare Workers AI (`env.AI`), Cloudflare D1 (`env.ANALYTICS_DB`)
+  - No other external APIs; external links on tickets are mock URLs.
 
 # Repository Structure
-- Top-level tree:
-  - `.git/`: Git metadata (not documented here).
-  - `.wrangler/`: Wrangler state (generated).
-  - `dist/`: Build output (generated).
-  - `node_modules/`: Dependency tree (generated; contents correspond to `package.json`/`package-lock.json`).
-  - `functions/`: Cloudflare Pages Functions.
-  - `migrations/`: D1 schema migrations.
-  - `public/`: Static assets.
-  - `scripts/`: D1 seed script.
-  - `src/`: Application source code.
-  - Config files: `package.json`, `tsconfig*.json`, `vite.config.ts`, `tailwind.config.ts`, `postcss.config.js`, `eslint.config.js`, `wrangler.toml`, `components.json`, `index.html`.
+- `index.html`
+  - Purpose: Vite HTML entry and document metadata.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Favicon links to `/favicon.svg` and `/favicon.ico`.
+- `package.json`
+  - Purpose: Dependency and script definitions.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Uses Vite, React, Tailwind, Radix.
+- `package-lock.json`
+  - Purpose: npm lockfile.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Must stay in sync with `package.json`.
+- `bun.lockb`
+  - Purpose: Bun lockfile.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `vite.config.ts`
+  - Purpose: Vite build config.
+  - Key functions / classes / exports: Vite config.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`
+  - Purpose: TypeScript configuration.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `eslint.config.js`
+  - Purpose: ESLint configuration.
+  - Key functions / classes / exports: ESLint config.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `postcss.config.js`, `tailwind.config.ts`
+  - Purpose: CSS tooling configuration.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Tailwind is used throughout UI.
+- `components.json`
+  - Purpose: shadcn/ui configuration.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `README.md`
+  - Purpose: Project documentation (THIS file).
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Must be source of truth.
+- `public/placeholder.svg`
+  - Purpose: Placeholder asset.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `public/favicon.ico`
+  - Purpose: Fallback favicon.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Browser should prefer SVG if supported.
+- `public/favicon.svg`
+  - Purpose: Primary favicon (brain icon).
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Should match topbar brain icon.
+- `public/robots.txt`
+  - Purpose: Robots directive.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `scripts/seed-d1.sql`
+  - Purpose: Seed `feedback_metrics` table in D1.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Table `feedback_metrics` exists.
+- `migrations/0001_init.sql`
+  - Purpose: D1 migration creating `feedback_metrics`.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: D1 database named in `wrangler.toml`.
+- `wrangler.toml`
+  - Purpose: Cloudflare Workers/Pages config.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
-- File-by-file details:
-  - `README.md`: Project documentation (this file). No runtime exports.
-  - `package.json`: Project metadata, scripts, and dependencies. Key scripts: `dev`, `build`, `seed:d1`, `test`.
-  - `package-lock.json`: NPM lockfile. Assumes `npm install` for exact deps.
-  - `bun.lockb`: Bun lockfile (unused unless Bun is used).
-  - `index.html`: Vite HTML entrypoint with `#root` mount.
-  - `vite.config.ts`: Vite config with React SWC plugin.
-  - `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`: TypeScript configs.
-  - `tailwind.config.ts`: Tailwind config with typography + animations.
-  - `postcss.config.js`: PostCSS config with Tailwind + autoprefixer.
-  - `eslint.config.js`: ESLint config.
-  - `components.json`: shadcn/ui component registry config.
-  - `wrangler.toml`: Cloudflare Worker/Pages config (bindings, compatibility date) (values not described here).
-  - `public/favicon.ico`: Favicon.
-  - `public/robots.txt`: Robots file.
-  - `public/placeholder.svg`: Placeholder asset.
-  - `migrations/0001_init.sql`: D1 schema for `feedback_metrics` table.
-  - `scripts/seed-d1.sql`: D1 seed script for metrics table.
+## src/
+- `src/main.tsx`
+  - Purpose: React app entry (renders `App`).
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/App.tsx`
+  - Purpose: Router configuration.
+  - Key functions / classes / exports: default App component.
+  - Critical assumptions or invariants: Routes are `/`, `/themes`, `/pm-metrics`, `*`.
+- `src/App.css`
+  - Purpose: App-level styling.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/index.css`
+  - Purpose: Global CSS (Tailwind base).
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/vite-env.d.ts`
+  - Purpose: Vite TypeScript env types.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/worker.ts`
+  - Purpose: Cloudflare Worker for API + asset serving.
+  - Key functions / classes / exports: default fetch handler.
+  - Critical assumptions or invariants:
+    - `env.ANALYTICS_DB` is a D1 database.
+    - `env.AI` (Workers AI) is optional; fallback uses mock insights.
+- `src/data/mockFeedback.ts`
+  - Purpose: Mock dataset generator and schema.
+  - Key functions / classes / exports: `mockFeedback`, `issueTypeConfig`, `sourceConfig`, types.
+  - Critical assumptions or invariants:
+    - Ticket schema includes `createdAt`, `updatedAt`, `priorityScore`, `customerSegment`, `tags`, `jiraUrl`, `mediaUrl`.
+- `src/lib/apiClient.ts`
+  - Purpose: API client types (Entries/Themes/Trends).
+  - Key functions / classes / exports: Types and/or fetch helpers.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/lib/kpiUtils.ts`
+  - Purpose: KPI filters + helper computations (negative %, critical %, top source).
+  - Key functions / classes / exports: `applyEntryFilters`, `computeCriticalPercentage`, `computeTopSource`, etc.
+  - Critical assumptions or invariants:
+    - Uses `createdAt` or `timestamp` for time filtering.
+- `src/lib/utils.ts`
+  - Purpose: Utility helpers (className merging).
+  - Key functions / classes / exports: `cn` etc.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/utils/feedbackTableFilters.ts`
+  - Purpose: View Tickets filter state, URL parsing/serialization, filter predicate.
+  - Key functions / classes / exports: `TableFilters`, `DEFAULT_FILTERS`, `applyFilters`, `parseFiltersFromSearch`, `serializeFiltersToSearch`.
+  - Critical assumptions or invariants:
+    - Time filtering uses `createdAt` when present; fallback to `timestamp`.
+    - Priority bands derived from `priorityScore`.
+- `src/utils/emergingThemes.ts`
+  - Purpose: Emerging theme detection logic.
+  - Key functions / classes / exports: `computeEmergingThemes` + helpers.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/hooks/useDashboardKpis.ts`
+  - Purpose: Fetch + compute KPI values.
+  - Key functions / classes / exports: hook.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/hooks/use-mobile.tsx`, `src/hooks/use-toast.ts`
+  - Purpose: Responsive and toast hooks.
+  - Key functions / classes / exports: hooks.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
-  - `functions/api/feedback.ts`:
-    - Purpose: Serve feedback JSON via Pages Functions.
-    - Exports: `onRequest` (PagesFunction).
-    - Assumptions: `mockFeedback` exists; timestamps are serialized to ISO.
-  - `functions/api/metrics.ts`:
-    - Purpose: Compute metrics from mock data and upsert into D1.
-    - Exports: `onRequest`.
-    - Assumptions: `env.ANALYTICS_DB` bound; table exists.
-  - `functions/api/insights.ts`:
-    - Purpose: Build AI insights (Workers AI if available; fallback otherwise).
-    - Exports: `onRequest`.
-    - Assumptions: `env.AI` binding optional; returns JSON.
+## src/pages/
+- `src/pages/Index.tsx`
+  - Purpose: Overview page (triage).
+  - Key functions / classes / exports: default `Index`.
+  - Critical assumptions or invariants:
+    - Uses `NeedsAttentionOverlay` for bell overlay content.
+    - Loads feedback via `/api/feedback` fallback to `mockFeedback`.
+- `src/pages/PmMetrics.tsx`
+  - Purpose: PM Metrics page (product health signals).
+  - Key functions / classes / exports: default `PmMetrics`.
+  - Critical assumptions or invariants:
+    - Uses absolute counts; compare vs previous period when enabled.
+    - Uses `NeedsAttentionOverlay` for bell overlay.
+- `src/pages/Themes.tsx`
+  - Purpose: Themes detail placeholder.
+  - Key functions / classes / exports: default `Themes`.
+  - Critical assumptions or invariants: Uses `Header` and Needs Attention overlay based on mock data.
+- `src/pages/NotFound.tsx`
+  - Purpose: 404 page.
+  - Key functions / classes / exports: default `NotFound`.
+  - Critical assumptions or invariants: Uses `Header` and Needs Attention overlay based on mock data.
 
-  - `src/main.tsx`:
-    - Purpose: React entrypoint.
-    - Exports: none.
-    - Invariant: `#root` exists in `index.html`.
-  - `src/App.tsx`:
-    - Purpose: App shell, router, query client, tooltip providers.
-    - Exports: default `App`.
-    - Invariant: `BrowserRouter` routes `/`, `/themes`, `*`.
-  - `src/App.css`: App-level CSS (if any).
-  - `src/index.css`: Tailwind base + global styles.
-  - `src/vite-env.d.ts`: Vite typings.
-  - `src/worker.ts`:
-    - Purpose: Worker implementation of `/api/feedback`, `/api/metrics`, `/api/insights` and static asset fallback.
-    - Exports: default fetch handler.
-    - Invariant: `env.ANALYTICS_DB`, `env.ASSETS`, `env.AI` expected when deployed to Worker.
+## src/components/dashboard/
+- `Header.tsx`
+  - Purpose: Top bar with brand, nav, refresh, bell overlay anchor.
+  - Key functions / classes / exports: `Header`.
+  - Critical assumptions or invariants:
+    - Bell overlay content is passed via `needsAttentionContent`.
+- `NeedsAttentionOverlay.tsx`
+  - Purpose: Shared overlay content for bell icon.
+  - Key functions / classes / exports: `NeedsAttentionOverlay`, `buildNeedsAttentionData`.
+  - Critical assumptions or invariants:
+    - Uses last 7 days window, high/critical unresolved alerts.
+- `KpiCard.tsx`
+  - Purpose: Generic KPI card layout with optional tooltip and right-aligned title content.
+  - Key functions / classes / exports: `KpiCard`.
+  - Critical assumptions or invariants: Title row supports optional info icon and custom `titleRight`.
+- `KpiStrip.tsx`
+  - Purpose: Overview KPI row and theme distribution card.
+  - Key functions / classes / exports: `KpiStrip`.
+  - Critical assumptions or invariants:
+    - `isFiltering` triggers spinner in titles.
+- `TrendsCard.tsx`
+  - Purpose: Trends line chart with time slicing and legend toggles.
+  - Key functions / classes / exports: `TrendsCard`.
+  - Critical assumptions or invariants:
+    - Series: Total Tickets, Priority Tickets (High+Critical), Negative Tickets.
+- `FeedbackTable.tsx`
+  - Purpose: View Tickets table with filters, sorting, chips, CSV export, detail modal.
+  - Key functions / classes / exports: `FeedbackTable`.
+  - Critical assumptions or invariants:
+    - Relies on `applyFilters` from `feedbackTableFilters.ts`.
+- `FeedbackDetail.tsx`
+  - Purpose: Ticket detail modal.
+  - Key functions / classes / exports: `FeedbackDetail`.
+  - Critical assumptions or invariants: Shows ticket details; status is read-only (no resolve action).
+- `FilterBar.tsx`
+  - Purpose: Global filter bar (Source + Time).
+  - Key functions / classes / exports: `FilterBar`.
+  - Critical assumptions or invariants: Uses `activeTime` and `customRange` from parent.
+- `AIInsights.tsx`
+  - Purpose: AI insights card UI.
+  - Key functions / classes / exports: `AIInsights`.
+  - Critical assumptions or invariants: Can render filtered insights list.
+- `EmergingThemesCard.tsx`, `SentimentChart.tsx`, `CategoryChart.tsx`, `SourceDistribution.tsx`, `IssueTrendModal.tsx`, `MetricCard.tsx`
+  - Purpose: UNKNOWN (not inspected).
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
-  - `src/pages/Index.tsx`:
-    - Purpose: Main dashboard page.
-    - Exports: default `Index` component.
-    - Key logic: loads feedback; maintains filters; pre-indexes data; computes KPIs; renders filter bar, KPI strip, Trends card, overlay content, and Feedback table.
-    - Invariants: `feedback` items have `timestamp: Date`.
-  - `src/pages/Themes.tsx`:
-    - Purpose: Themes page (UNKNOWN functionality; not modified in this session).
-    - Exports: default `Themes` component.
-  - `src/pages/NotFound.tsx`:
-    - Purpose: 404 page.
-    - Exports: default `NotFound` component.
+## src/components/ui/
+- All files under `src/components/ui/*`
+  - Purpose: shadcn/ui components (Radix wrappers).
+  - Key functions / classes / exports: Component(s) per file.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
-  - `src/data/mockFeedback.ts`:
-    - Purpose: Mock data generator and config dictionaries.
-    - Exports: `FeedbackItem` type, `mockFeedback` array (~6000 entries), `sourceConfig`, `sentimentConfig`, `urgencyConfig`, `issueTypeConfig`.
-    - Invariants: `timestamp` is `Date`, `issueType` is one of six categories.
+## functions/api/
+- `functions/api/feedback.ts`
+  - Purpose: Pages Function for `/api/feedback` (returns mock feedback).
+  - Key functions / classes / exports: `onRequest`.
+  - Critical assumptions or invariants: Uses `mockFeedback`.
+- `functions/api/metrics.ts`
+  - Purpose: Pages Function for `/api/metrics` (computes metrics; writes to D1).
+  - Key functions / classes / exports: `onRequest`.
+  - Critical assumptions or invariants: `env.ANALYTICS_DB` is configured.
+- `functions/api/insights.ts`
+  - Purpose: Pages Function for `/api/insights` (Workers AI or fallback).
+  - Key functions / classes / exports: `onRequest`.
+  - Critical assumptions or invariants: `env.AI` optional; returns default insights if absent.
 
-  - `src/lib/apiClient.ts`:
-    - Purpose: Client for `/api/feedback`, `/api/themes`, `/api/trends`.
-    - Exports: types `Entry`, `Theme`, `Trends`, `EntriesParams`, `EntriesResponse`; `apiClient` with `getEntries`, `getThemes`, `getTrends`.
-    - Invariants: `/api/feedback` returns array or `{items}`.
-
-  - `src/lib/kpiUtils.ts`:
-    - Purpose: KPI helpers and filters.
-    - Exports: `KpiFilters`, `applyEntryFilters`, `deriveThemesFromEntries`, `computeNegativePercentage`, `computeHighCriticalCount`, `computeCriticalPercentage`, `computeTopSource`, `computeTopIssueType`, `computeEmergingThemes`, `computeEmergingThemesFromEntries`, `formatPercent`, `formatLabel`, `getTopSourceLabel`, plus normalization helpers.
-    - Invariants: Accepts `Entry`/`Theme` types; timestamps may be string/Date.
-
-  - `src/utils/emergingThemes.ts`:
-    - Purpose: Client-side emerging theme detection.
-    - Exports: `EmergingTheme` type, `computeEmergingThemes`, `parseTimestampSafe`, `normalizeUrgency`, `normalizeSentiment`.
-    - Invariants: Uses 7-day windows by default; ignores entries without timestamps.
-
-  - `src/hooks/useDashboardKpis.ts`:
-    - Purpose: KPI data loader + computation.
-    - Exports: `useDashboardKpis` hook.
-    - Invariants: if `entriesOverride` provided, skips network; only computes `totalEntries` and `topIssueType` (others set to null).
-
-  - `src/hooks/use-toast.ts`, `src/hooks/use-mobile.tsx`:
-    - Purpose: shadcn hooks (toast + mobile breakpoint detection).
-    - Exports: `useToast`, `toast` and `useIsMobile` (per file).
-
-  - `src/components/NavLink.tsx`:
-    - Purpose: Styled navigation link component.
-    - Exports: default `NavLink` (UNKNOWN details).
-
-  - `src/components/dashboard/Header.tsx`:
-    - Purpose: Top header with search and refresh.
-    - Exports: `Header`.
-    - Invariants: `onSearch`/`onRefresh` callbacks required.
-
-  - `src/components/dashboard/FilterBar.tsx`:
-    - Purpose: Source/Time filters with custom range.
-    - Exports: `FilterBar`.
-    - Invariants: Custom range shown inline after `All` time chip when `activeTime === 'custom'`; Custom chip hidden while active.
-
-  - `src/components/dashboard/KpiCard.tsx`:
-    - Purpose: KPI card layout component with optional action slot.
-    - Exports: `KpiCard`.
-    - Invariants: `action` rendered in header; uses `valueHidden` to suppress main value.
-
-  - `src/components/dashboard/KpiStrip.tsx`:
-    - Purpose: KPI strip layout with Ticket Counter pie and Issue Types.
-    - Exports: `KpiStrip`.
-    - Invariants: Grid columns change if `secondaryCard` is null; clicking pie slices triggers `onSourceSelect`.
-
-  - `src/components/dashboard/TrendsCard.tsx`:
-    - Purpose: Trends line chart with local time granularity synced to global filter, drag selection, and AI Insights overlay.
-    - Exports: `TrendsCard`.
-    - Invariants: Uses Recharts; overlay closes on outside click or X; time granularity synced to global filters; highlight overlay bounded to plot area.
-
-  - `src/components/dashboard/IssueTrendModal.tsx`:
-    - Purpose: Modal trend chart opened from Emerging Issues (interaction currently disabled in card).
-    - Exports: `IssueTrendModal`.
-    - Invariants: Uses drag selection overlay; currently clears overlay after selection.
-
-  - `src/components/dashboard/AIInsights.tsx`:
-    - Purpose: AI insights card; supports compact layout.
-    - Exports: `AIInsights`.
-    - Invariants: Filters out `Critical Issues` insight; compact mode shows two cards side-by-side.
-
-  - `src/components/dashboard/EmergingThemesCard.tsx`:
-    - Purpose: Emerging Issues list.
-    - Exports: `EmergingThemesCard`.
-    - Invariants: No click interactions; cards rendered in two-column grid.
-
-  - `src/components/dashboard/FeedbackTable.tsx`:
-    - Purpose: Recent feedback table with pagination.
-    - Exports: `FeedbackTable`.
-    - Invariants: Uses `formatDistanceToNow`; page size options 10/50/100.
-
-  - `src/components/dashboard/FeedbackDetail.tsx`:
-    - Purpose: Detail modal for selected feedback item.
-    - Exports: `FeedbackDetail` (UNKNOWN internals).
-
-  - `src/components/dashboard/MetricCard.tsx`, `SentimentChart.tsx`, `SourceDistribution.tsx`, `CategoryChart.tsx`:
-    - Purpose: Dashboard charts/cards (legacy/auxiliary). 
-    - Exports: per component file (UNKNOWN details).
-
-  - `src/components/ui/*` (shadcn/ui wrappers):
-    - Purpose: UI primitives based on Radix UI and utility styling.
-    - Exports (key):
-      - `accordion.tsx`: `Accordion`, `AccordionItem`, `AccordionTrigger`, `AccordionContent`.
-      - `alert-dialog.tsx`: Radix alert dialog exports.
-      - `alert.tsx`: `Alert`, `AlertTitle`, `AlertDescription`.
-      - `aspect-ratio.tsx`: `AspectRatio`.
-      - `avatar.tsx`: `Avatar`, `AvatarImage`, `AvatarFallback`.
-      - `badge.tsx`: `Badge`, `badgeVariants`.
-      - `breadcrumb.tsx`: breadcrumb components (see file for full list).
-      - `button.tsx`: `Button`, `buttonVariants`, `ButtonProps`.
-      - `calendar.tsx`: `Calendar`.
-      - `card.tsx`: `Card`, `CardHeader`, `CardFooter`, `CardTitle`, `CardDescription`, `CardContent`.
-      - `carousel.tsx`: `Carousel`, `CarouselContent`, `CarouselItem`, `CarouselPrevious`, `CarouselNext`, `CarouselApi`.
-      - `chart.tsx`: `ChartContainer`, `ChartTooltip`, `ChartTooltipContent`, `ChartLegend`, `ChartLegendContent`, `ChartStyle`, `ChartConfig`.
-      - `checkbox.tsx`: `Checkbox`.
-      - `collapsible.tsx`: `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent`.
-      - `command.tsx`: `Command`, `CommandInput`, etc. (see file for full list).
-      - `context-menu.tsx`: Radix context menu exports (see file).
-      - `dialog.tsx`: `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, etc.
-      - `drawer.tsx`: drawer exports (see file).
-      - `dropdown-menu.tsx`: dropdown exports (see file).
-      - `form.tsx`: `Form`, `FormField`, `FormItem`, `FormLabel`, `FormControl`, `FormDescription`, `FormMessage`, `useFormField`.
-      - `hover-card.tsx`: `HoverCard`, `HoverCardTrigger`, `HoverCardContent`.
-      - `input-otp.tsx`: `InputOTP`, `InputOTPGroup`, `InputOTPSlot`, `InputOTPSeparator`.
-      - `input.tsx`: `Input`.
-      - `label.tsx`: `Label`.
-      - `menubar.tsx`: menubar exports (see file).
-      - `navigation-menu.tsx`: navigation menu exports (see file).
-      - `pagination.tsx`: pagination exports (see file).
-      - `popover.tsx`: `Popover`, `PopoverTrigger`, `PopoverContent`.
-      - `progress.tsx`: `Progress`.
-      - `radio-group.tsx`: `RadioGroup`, `RadioGroupItem`.
-      - `resizable.tsx`: `ResizablePanelGroup`, `ResizablePanel`, `ResizableHandle`.
-      - `scroll-area.tsx`: `ScrollArea`, `ScrollBar`.
-      - `select.tsx`: select exports (see file).
-      - `separator.tsx`: `Separator`.
-      - `sheet.tsx`: sheet exports (see file).
-      - `sidebar.tsx`: sidebar exports (see file).
-      - `skeleton.tsx`: `Skeleton`.
-      - `slider.tsx`: `Slider`.
-      - `sonner.tsx`: `Toaster`, `toast`.
-      - `switch.tsx`: `Switch`.
-      - `table.tsx`: table exports.
-      - `tabs.tsx`: `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`.
-      - `textarea.tsx`: `Textarea`.
-      - `toast.tsx`: toast primitives.
-      - `toaster.tsx`: `Toaster`.
-      - `toggle.tsx`: `Toggle`, `toggleVariants`.
-      - `toggle-group.tsx`: `ToggleGroup`, `ToggleGroupItem`.
-      - `tooltip.tsx`: `Tooltip`, `TooltipTrigger`, `TooltipContent`, `TooltipProvider`.
-      - `use-toast.ts`: `useToast`, `toast`.
-    - Invariants: Components follow shadcn/ui + Radix patterns.
+## tests/
+- `src/test/feedbackTableFilters.test.ts`
+  - Purpose: Tests for filter parsing/predicate.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Uses `applyFilters` and `parseFiltersFromSearch`.
+- `src/test/example.test.ts`, `src/test/setup.ts`
+  - Purpose: UNKNOWN (not inspected).
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
 # Implementation Details
 - Core business logic:
-  - Feedback generation: `buildMockFeedback()` creates 6000 items, randomized over the last 2 years with skewed “emerging” issues for `performance` and `bug`.
-  - Filtering: `Index.tsx` uses indexed feedback for fast search and separates base filters (search+source) from time filters.
-  - KPI computations: `KpiStrip` uses `useDashboardKpis` for totals/top issue type plus local aggregation for pie chart and issue types.
-  - Trend computation: `TrendsCard` buckets entries by time range and uses Recharts to plot `count` and `avgUrgency` lines.
-  - Emerging themes: `computeEmergingThemes` compares current vs previous windows (default 7 days) and scores by volume/urgency/negative ratio.
+  - `applyFilters` (View Tickets) applies AND across filter categories and OR within a category; time filtering uses `createdAt`/`timestamp`.
+  - Priority bands: P0 >= 80, P1 60–79, P2 40–59, P3 < 40.
+  - Needs Attention overlay:
+    - Active Alerts = unresolved high/critical tickets within last 7 days (sorted critical before high, then oldest first).
+    - Emerging Issues computed via `computeEmergingThemes`.
+  - PM Metrics:
+    - Time range supports 7/30/90 days or custom; compare against previous window.
+    - KPI deltas are absolute differences; median uses `median` helper.
+    - “Priority Tickets” in Trends = High + Critical urgency count.
 - State management approach:
-  - Local `useState` in `Index.tsx` for filters, selections, and overlays.
-  - `useMemo` to compute filtered arrays and KPI derived values.
-  - `useDeferredValue` for search input to reduce filter churn.
+  - Local component state via `useState`, derived values via `useMemo`.
+  - URL query params handled in `feedbackTableFilters.ts`.
 - Error handling behavior:
-  - `/api/feedback` fetch failures fall back to `mockFeedback`.
-  - AI insights fetch errors return fallback insights.
-  - `apiClient` returns null for missing `/api/themes`/`/api/trends`.
+  - API fetches fall back to `mockFeedback` on error.
+  - Workers AI failures fall back to default insights.
 - Edge cases handled:
-  - Missing timestamps are ignored in emerging theme computation.
-  - Empty datasets yield `—` or empty state blocks.
-  - Filter reset/selection handles custom time ranges.
+  - Missing timestamps fallback to `createdAt` or `timestamp`.
+  - Empty datasets show placeholders (`—`) or empty states.
 - Performance considerations already implemented:
-  - Pre-indexed feedback for search.
-  - Collapsed multiple filter passes into shared base filtered list.
-  - `useDeferredValue` for search input.
-  - Chart overlay and drag selection throttled with `requestAnimationFrame`.
+  - Heavy computations memoized via `useMemo`.
+  - Filters use precomputed search text in `Index`.
 
 # Key Decisions & Constraints
-- Architectural decisions and rationale:
-  - Client-side filtering and aggregation to keep mock data local and fast.
-  - Cloudflare Pages Functions and Worker endpoints reuse mock data for consistency.
-  - AI Insights overlay placed within Trends card to avoid modal navigation.
-- Trade-offs accepted:
-  - Large mock dataset (6000 items) can cause UI lag; mitigated by memoization and indexing.
-  - `/api/themes` and `/api/trends` are not implemented; related features use fallbacks.
-- Hard constraints that MUST NOT be violated in future changes:
-  - Do not remove mock data fallback.
-  - Keep global filters and Trends granularity in sync.
-  - Avoid drastic UI redesigns outside existing design system.
+- SPA only, no SSR.
+- Mock data is the primary dataset; backend endpoints serve the same mock data.
+- UI design must follow existing dark, glassy cards and shadcn components.
+- Overview focuses on triage; PM Metrics focuses on longitudinal trends.
+- Filters and sorting should be stable and predictable.
 
 # Current Project State
 - Fully working features:
-  - Feedback list with pagination.
-  - Global Source/Time filters with custom range.
-  - KPI strip with Ticket Counter pie and Issue Types.
-  - Trends chart with synced granularity and drag-to-select ranges.
-  - AI Insights overlay with Emerging Issues inside.
+  - Overview dashboard with KPI cards, Trends chart, Needs Attention overlay.
+  - PM Metrics dashboard with multiple sections and charts.
+  - View Tickets table with filters, sorting, CSV export, detail modal.
+  - Cloudflare Worker/Pages endpoints `/api/feedback`, `/api/metrics`, `/api/insights`.
 - Partially implemented features:
-  - `/api/themes` and `/api/trends` are referenced but not implemented.
-  - IssueTrendModal is present but its trigger was removed from Emerging Issues card.
+  - Reopen rate metric on PM Metrics shows “Coming soon”.
 - Broken or unimplemented features:
-  - UNKNOWN: any routing beyond `/` and `/themes` (not evaluated).
+  - UNKNOWN (not verified in this session).
 
 # Open Tasks (Priority Order)
-- Investigate residual UI lag when overlays are open and when filters change.
-  - Intended behavior: smooth interaction during drag and filter changes.
-  - Relevant files: `src/pages/Index.tsx`, `src/components/dashboard/TrendsCard.tsx`, `src/components/dashboard/AIInsights.tsx`.
-  - Pitfalls: avoid reintroducing heavy array scans.
-- Decide on `/api/themes` and `/api/trends` endpoints or remove related client calls.
-  - Intended behavior: consistent API behavior without 404s.
-  - Relevant files: `src/lib/apiClient.ts`, `functions/api/*`, `src/worker.ts`.
-  - Pitfalls: keep backwards compatibility with existing hooks.
+- Validate PM Metrics deep-link filters and update any mismatches in query params:
+  - Intended behavior: clicking “View” in PM Metrics lists applies filters via query params.
+  - Relevant files: `src/pages/PmMetrics.tsx`, `src/utils/feedbackTableFilters.ts`.
+  - Known pitfalls or context: Query param parsing lowercases and normalizes values.
+- Confirm performance/lag improvements:
+  - Intended behavior: interactions remain responsive with ~6000 mock entries.
+  - Relevant files: `src/pages/Index.tsx`, `src/components/dashboard/TrendsCard.tsx`.
+  - Known pitfalls or context: chart interactions can be expensive if not memoized.
+- Validate overlay behavior:
+  - Intended behavior: bell overlay closes only on outside click; consistent across pages.
+  - Relevant files: `src/components/dashboard/Header.tsx`, `src/components/dashboard/NeedsAttentionOverlay.tsx`.
+  - Known pitfalls or context: overlay should ignore clicks on bell and inside overlay.
 
 # Known Issues & Risks
-- UI performance can still lag on lower-end devices due to large dataset and heavy charts.
-- `AIInsights` uses fetch to `/api/insights`; when AI binding is unavailable, it falls back silently.
-- `useDashboardKpis` no longer uses themes/trends; some KPI fields are always null by design.
-- `/api/themes` and `/api/trends` not implemented in functions folder.
+- User-reported performance lag previously; current status UNKNOWN.
+- Many components are uninspected; behavior assumptions may be incomplete.
+- The PM Metrics page uses mock data only; real backend integrations are not present.
 
 # Rules for Future Development
 - Coding standards to follow:
-  - TypeScript for all new logic.
-  - Keep UI consistent with existing Tailwind + shadcn/ui patterns.
-  - Prefer `useMemo` and `useDeferredValue` for derived data on large arrays.
+  - Keep TypeScript strictness; prefer typed props and helpers.
+  - Reuse existing design components and Tailwind utility patterns.
 - Things future Codex sessions must NEVER do:
-  - Remove mock feedback fallback or break `/api/feedback`.
-  - Introduce server-side dependencies without updating Cloudflare functions and bindings.
+  - Do not remove mock data fields without updating all dependent UI/filter logic.
+  - Do not introduce new design patterns that conflict with existing dark/glass UI.
 - Things future Codex sessions must ALWAYS do:
-  - Keep global and local time filters in sync.
-  - Update README when making architectural or API changes.
+  - Update URL query serialization when adding new table filters.
+  - Keep Overview and PM Metrics topbar behavior consistent.
 
 # Continuation Instructions
-- Exact next task to work on: Investigate remaining performance bottlenecks by profiling filter interactions and the Trends overlay.
-- Preconditions before starting:
-  - Run `npm install` and `npm run dev`.
-  - Open the dashboard and test filter interactions with 6000 mock items.
-- Expected outcome of the next task:
-  - Reduced interaction latency during filter changes and overlay use without regressions in chart behavior.
+- Exact next task to work on: Validate PM Metrics deep-link filters and update any mismatches in query params.
+- Preconditions before starting: App builds and loads without runtime errors.
+- Expected outcome of the next task: Clicking “View” in PM Metrics lists navigates to Overview with filters applied and table reflecting those filters.

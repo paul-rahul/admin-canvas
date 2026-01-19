@@ -2,6 +2,7 @@ import { Bell, RefreshCw, Brain, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
+import { NavLink } from '@/components/NavLink';
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -51,10 +52,30 @@ export function Header({
             <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center glow-primary">
               <Brain className="h-5 w-5 text-primary-foreground" />
             </div>
-            <div>
+            <NavLink
+              to="/"
+              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+              activeClassName="text-foreground"
+            >
               <h1 className="text-xl font-bold">Cerebro</h1>
-            </div>
+            </NavLink>
           </div>
+          <nav className="hidden md:flex items-center gap-3 text-sm text-muted-foreground">
+            <NavLink
+              to="/"
+              className="px-2 py-1 rounded-md hover:text-foreground hover:bg-muted/30 transition"
+              activeClassName="text-foreground bg-muted/40"
+            >
+              Overview
+            </NavLink>
+            <NavLink
+              to="/pm-metrics"
+              className="px-2 py-1 rounded-md hover:text-foreground hover:bg-muted/30 transition"
+              activeClassName="text-foreground bg-muted/40"
+            >
+              PM Metrics
+            </NavLink>
+          </nav>
         </div>
 
         <div className="flex items-center gap-4">
