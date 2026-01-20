@@ -823,7 +823,7 @@ export const issueTypeConfig: Record<IssueType, { label: string; color: string }
   ux: { label: 'UX', color: 'bg-info' },
   pricing: { label: 'Pricing', color: 'bg-success' },
   documentation: { label: 'Docs', color: 'bg-muted-foreground' },
-  account_access: { label: 'Account Access', color: 'bg-info' },
+  account_access: { label: 'Account', color: 'bg-info' },
   billing: { label: 'Billing', color: 'bg-warning' },
   reliability: { label: 'Reliability', color: 'bg-destructive' },
   integration: { label: 'Integration', color: 'bg-primary' },

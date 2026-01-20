@@ -3,8 +3,11 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
   XAxis,
@@ -24,7 +27,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { NeedsAttentionOverlay, buildNeedsAttentionData } from '@/components/dashboard/NeedsAttentionOverlay';
 import { mockFeedback, issueTypeConfig, sourceConfig, type FeedbackItem } from '@/data/mockFeedback';
 import { serializeFiltersToSearch, DEFAULT_FILTERS, type TimePreset, type TableFilters } from '@/utils/feedbackTableFilters';
-import { Calendar as CalendarIcon, TrendingDown, TrendingUp } from 'lucide-react';
+import { Calendar as CalendarIcon, Info, TrendingDown, TrendingUp } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 type TimeRangeKey = '7d' | '30d' | '90d' | 'custom';
@@ -409,6 +413,53 @@ const SegmentImpactTooltip = ({
   );
 };
 
+const ThemeUserTypeTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number | null }>;
+  label?: string;
+}) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const valueMap = new Map(payload.map((entry) => [entry.name ?? '', entry.value ?? 0]));
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/95 px-4 py-3 text-xs shadow-card">
+      <div className="mb-2 text-sm font-semibold text-foreground">{label}</div>
+      {['Free', 'Pro', 'Enterprise', 'Unknown'].map((key) => (
+        <div key={key} className="flex items-center justify-between gap-4 text-muted-foreground">
+          <span>{key}</span>
+          <span className="font-semibold text-foreground">{valueMap.get(key) ?? 0}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const BacklogAgingTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { count?: number } }>;
+  label?: string;
+}) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const data = payload[0]?.payload;
+  if (!data) return null;
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/95 px-4 py-3 text-xs shadow-card">
+      <div className="mb-2 text-sm font-semibold text-foreground">{label}</div>
+      <div className="flex items-center justify-between gap-4 text-muted-foreground">
+        <span>Open Tickets</span>
+        <span className="font-semibold text-foreground">{data.count ?? 0}</span>
+      </div>
+    </div>
+  );
+};
+
 
 export default function PmMetrics() {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -768,6 +819,17 @@ export default function PmMetrics() {
       .filter((item) => item.count > 0);
   }, [currentEntries]);
 
+  const sourceColors: Record<string, string> = {
+    support: 'hsl(142 71% 45%)',
+    discord: 'hsl(199 89% 48%)',
+    github: 'hsl(215 20% 60%)',
+    twitter: 'hsl(199 89% 48%)',
+    email: 'hsl(38 92% 50%)',
+    forum: 'hsl(142 71% 45%)',
+    other: 'hsl(215 20% 55%)',
+    unknown: 'hsl(215 20% 55%)',
+  };
+
   const priorityDotData = useMemo(() => {
     const counts: Record<string, number> = { p0: 0, p1: 0, p2: 0, p3: 0 };
     closedEntries.forEach((entry) => {
@@ -776,15 +838,15 @@ export default function PmMetrics() {
     });
     const total = Object.values(counts).reduce((sum, value) => sum + value, 0) || 1;
     const priorityColors: Record<string, string> = {
-      p0: 'bg-destructive',
-      p1: 'bg-warning',
-      p2: 'bg-info',
-      p3: 'bg-muted-foreground',
+      p0: 'hsl(0 84% 60%)',
+      p1: 'hsl(38 92% 50%)',
+      p2: 'hsl(199 89% 48%)',
+      p3: 'hsl(215 20% 60%)',
     };
     return Object.entries(counts).map(([key, count]) => ({
       key,
       label: key.toUpperCase(),
-      color: priorityColors[key] ?? 'bg-muted-foreground',
+      color: priorityColors[key] ?? 'hsl(215 20% 60%)',
       count,
       dots: Math.max(3, Math.round((count / total) * 48)),
     }));
@@ -946,6 +1008,16 @@ export default function PmMetrics() {
       };
     });
   }, [currentEntries]);
+
+  const themeUserTypeStacked = useMemo(() => {
+    return topThemeSegmentDistribution.map((theme) => ({
+      label: theme.label,
+      free: theme.counts.free,
+      pro: theme.counts.pro,
+      enterprise: theme.counts.enterprise,
+      unknown: theme.counts.unknown,
+    }));
+  }, [topThemeSegmentDistribution]);
 
   const fastEscalations = useMemo(() => {
     const currentStats = buildIssueStats(currentEntries, () => true);
@@ -1308,10 +1380,10 @@ export default function PmMetrics() {
                 </div>
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={negativeTrendData}>
+                    <LineChart data={negativeTrendData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
                       <CartesianGrid stroke="transparent" />
                       <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
-                      <YAxis tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
+                      <YAxis tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} width={26} />
                       <ChartTooltip content={<NegativeTrendTooltip />} />
                       {negativeSeriesVisibility.total && (
                         <Line
@@ -1426,14 +1498,21 @@ export default function PmMetrics() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl border border-border/60 p-4">
+              <div className="rounded-xl border border-border/60 p-4 flex flex-col">
                 <h3 className="text-sm font-semibold">Segment Impact</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Showing only P0+P1 counts</p>
-                <div className="mt-4 h-56">
+                <div className="mt-4 h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={segmentImpact} margin={{ left: 0, right: 8 }}>
+                    <BarChart data={segmentImpact} margin={{ left: 0, right: 8, bottom: 12 }}>
                       <CartesianGrid stroke="transparent" />
-                      <XAxis dataKey="segment" tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
+                      <XAxis
+                        dataKey="segment"
+                        tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }}
+                        interval={0}
+                        angle={-45}
+                        textAnchor="end"
+                        height={52}
+                      />
                       <YAxis tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} width={26} />
                       <ChartTooltip content={<SegmentImpactTooltip />} />
                       <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
@@ -1487,46 +1566,47 @@ export default function PmMetrics() {
             <div>
               <h2 className="text-lg font-semibold">Theme & Area Deep Dive</h2>
             </div>
-            <div className="grid gap-4 grid-cols-1 xl:grid-cols-[1.2fr_1fr_1.2fr_1.2fr] auto-rows-fr">
-              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col">
-                <h3 className="text-sm font-semibold mb-2">Top Themes by Volume</h3>
-                <div className="mt-7 space-y-2 text-xs flex-1">
+            <div className="grid gap-4 grid-cols-1 xl:grid-cols-7 auto-rows-fr">
+              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col xl:col-span-2">
+                <h3 className="text-sm font-semibold mb-2">Volume Distribution</h3>
+                <div className="mt-0.5 space-y-2 text-xs flex-1">
                   {topThemes.map((theme) => (
                     <div key={theme.issueType} className="flex items-center justify-between gap-3">
                       <span className="truncate">{theme.label}</span>
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <span>
-                          {theme.count} ({theme.delta >= 0 ? '+' : ''}{theme.delta})
+                        <span className="text-muted-foreground">
+                          {theme.count}{' '}
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1",
+                              theme.delta > 0
+                                ? "text-success"
+                                : theme.delta < 0
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            (
+                            {theme.delta > 0 && <TrendingUp className="h-3 w-3" />}
+                            {theme.delta < 0 && <TrendingDown className="h-3 w-3" />}
+                            {theme.delta === 0 ? "0" : Math.abs(theme.delta)})
+                          </span>
                         </span>
-                        <Button variant="ghost" size="sm" asChild className="h-6 px-2 text-[11px]">
-                          <a href={viewTicketsLink({ issueTypes: [theme.issueType] })}>View</a>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => openThemeTickets(theme.issueType)}
+                        >
+                          View Tickets
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col">
-                <h3 className="text-sm font-semibold mb-2">Fastest Escalating Themes</h3>
-                <div className="space-y-2 text-xs flex-1">
-                  {fastEscalations.map((theme) => (
-                    <div key={theme.issueType} className="flex items-center justify-between gap-3">
-                      <span className="truncate">{theme.label}</span>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <span>
-                          {theme.delta >= 0 ? '+' : ''}
-                          {theme.delta} ({Math.round(theme.rate * 100)}%)
-                        </span>
-                        <Button variant="ghost" size="sm" asChild className="h-6 px-2 text-[11px]">
-                          <a href={viewTicketsLink({ issueTypes: [theme.issueType] })}>View</a>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col">
-                <h3 className="text-sm font-semibold mb-2">Product Area Heatmap</h3>
+              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col xl:col-span-2">
+                <h3 className="text-sm font-semibold mb-2">Priority Heatmap</h3>
                 <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,48px)] gap-2 text-[11px] flex-1">
                   <span className="text-muted-foreground">Area</span>
                   <span className="text-muted-foreground text-center">P0</span>
@@ -1553,39 +1633,44 @@ export default function PmMetrics() {
                   ))}
                 </div>
               </div>
-              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col">
-                <h3 className="text-sm font-semibold mb-2">Top Themes vs User Distribution</h3>
-                <div className="space-y-3 text-[11px] text-muted-foreground flex-1">
-                  {topThemeSegmentDistribution.map((theme) => (
-                    <div key={theme.issueType} className="space-y-1">
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="font-semibold text-foreground truncate">{theme.label}</span>
-                        <span>{theme.total}</span>
-                      </div>
-                      <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted/40">
-                        {(['free', 'pro', 'enterprise', 'unknown'] as const).map((segment) => {
-                          const value = theme.counts[segment];
-                          if (!value || !theme.total) return null;
-                          const width = (value / theme.total) * 100;
-                          const color =
-                            segment === 'free'
-                              ? 'bg-primary/70'
-                              : segment === 'pro'
-                              ? 'bg-primary/50'
-                              : segment === 'enterprise'
-                              ? 'bg-primary/90'
-                              : 'bg-muted-foreground/40';
-                          return <span key={segment} className={color} style={{ width: `${width}%` }} />;
-                        })}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <span>Free {theme.counts.free}</span>
-                        <span>Pro {theme.counts.pro}</span>
-                        <span>Enterprise {theme.counts.enterprise}</span>
-                        <span>Unknown {theme.counts.unknown}</span>
-                      </div>
-                    </div>
-                  ))}
+              <div className="rounded-xl border border-border/60 p-4 h-full flex flex-col xl:col-span-3">
+                <h3 className="text-sm font-semibold mb-2">User Distribution for top Themes</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={themeUserTypeStacked} layout="vertical" margin={{ left: 0 }}>
+                      <CartesianGrid stroke="transparent" />
+                      <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }}
+                        width={90}
+                      />
+                      <ChartTooltip content={<ThemeUserTypeTooltip />} />
+                      <Bar dataKey="free" stackId="segment" fill="hsl(38 92% 50%)" name="Free" />
+                      <Bar dataKey="pro" stackId="segment" fill="hsl(199 89% 48%)" name="Pro" />
+                      <Bar dataKey="enterprise" stackId="segment" fill="hsl(142 71% 45%)" name="Enterprise" />
+                      <Bar dataKey="unknown" stackId="segment" fill="hsl(215 20% 55%)" name="Unknown" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-foreground">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-[hsl(38_92%_50%)]" />
+                    Free
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-[hsl(199_89%_48%)]" />
+                    Pro
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-[hsl(142_71%_45%)]" />
+                    Enterprise
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-[hsl(215_20%_55%)]" />
+                    Unknown
+                  </span>
                 </div>
               </div>
             </div>
@@ -1595,7 +1680,7 @@ export default function PmMetrics() {
             <div>
               <h2 className="text-lg font-semibold">Product Quality & Stability</h2>
             </div>
-            <div className="grid gap-4 grid-cols-1 xl:grid-cols-[1.4fr_1fr_1fr]">
+            <div className="grid gap-4 grid-cols-1 xl:grid-cols-[1.4fr_1fr_1fr_1fr]">
               <div className="rounded-xl border border-border/60 p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <div>
@@ -1621,7 +1706,7 @@ export default function PmMetrics() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-foreground">
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-[hsl(0_84%_60%)]" />
                     Unresolved
@@ -1641,10 +1726,10 @@ export default function PmMetrics() {
                 </div>
               </div>
               <div className="rounded-xl border border-border/60 bg-background/60 p-4 shadow-card">
-                <h3 className="text-sm font-semibold">Closed Tickets by Resolution</h3>
+                <h3 className="text-sm font-semibold">Resolution Rationale</h3>
                 <div className="mt-4 grid grid-cols-[minmax(0,1fr)_72px_64px] gap-3 text-xs text-muted-foreground">
                   <span>Resolution</span>
-                  <span className="text-right">Value</span>
+                  <span className="text-right">Count</span>
                   <span className="text-right">vs prev</span>
                   {resolutionRows.map((row) => (
                     <div key={row.key} className="contents text-foreground">
@@ -1652,7 +1737,7 @@ export default function PmMetrics() {
                       <span className="text-right text-base font-semibold">{row.current}</span>
                       <span
                         className={cn(
-                          "text-right text-xs font-semibold",
+                          "inline-flex items-center justify-end gap-1 text-right text-xs font-semibold",
                           row.deltaPercent === null
                             ? "text-muted-foreground"
                             : row.deltaPercent >= 0
@@ -1660,83 +1745,94 @@ export default function PmMetrics() {
                             : "text-destructive"
                         )}
                       >
-                        {row.deltaPercent === null ? '—' : `${Math.abs(row.deltaPercent).toFixed(0)}%`}
+                        {row.deltaPercent === null ? (
+                          '—'
+                        ) : (
+                          <>
+                            {row.deltaPercent >= 0 ? (
+                              <TrendingUp className="h-3 w-3" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3" />
+                            )}
+                            {Math.abs(row.deltaPercent).toFixed(0)}%
+                          </>
+                        )}
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
               <div className="space-y-4">
-                <div className="rounded-xl border border-border/60 p-4">
-                  <h3 className="text-sm font-semibold mb-2">Backlog Aging</h3>
-                  <div className="h-32">
+              <div className="rounded-xl border border-border/60 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">Backlog Aging</h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded-full text-muted-foreground hover:text-foreground"
+                          aria-label="Backlog aging info"
+                        >
+                          <Info className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs whitespace-normal">
+                        Shows open tickets grouped by age since creation for unresolved/in-progress items.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                  <div className="mt-6 flex-1">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={backlogAging}>
-                        <CartesianGrid stroke="transparent" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
-                        <YAxis tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
-                        <ChartTooltip />
+                    <BarChart data={backlogAging} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                      <CartesianGrid stroke="transparent" />
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} />
+                      <YAxis tick={{ fontSize: 10, fill: 'hsl(215,20%,60%)' }} width={28} />
+                        <ChartTooltip content={<BacklogAgingTooltip />} />
                         <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
-                <KpiCard
-                  title="Time to First Action"
-                  value={timeToFirstAction ? `${timeToFirstAction.toFixed(1)}h` : '—'}
-                  subtext="Median hours (open tickets)"
-                  className="h-auto"
-                />
+              </div>
+              <div className="rounded-xl border border-border/60 bg-background/60 p-4 shadow-card">
+                <h3 className="text-sm font-semibold">Closed Tickets by Priority</h3>
+                <div className="mt-4 flex flex-col items-center">
+                  <div className="h-40 w-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={priorityDotData}
+                          dataKey="count"
+                          nameKey="label"
+                          innerRadius={36}
+                          outerRadius={64}
+                          paddingAngle={2}
+                        >
+                          {priorityDotData.map((entry) => (
+                            <Cell key={entry.key} fill={entry.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-foreground">
+                    {priorityDotData.map((item) => (
+                      <span key={item.key} className="inline-flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        {item.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-border/60 bg-background/60 p-4 shadow-card">
-              <div className="text-xs text-muted-foreground">{rangeLabel}</div>
-              <h3 className="mt-2 text-sm font-semibold">Created Tickets by Source</h3>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {sourceDotData.flatMap((item) =>
-                  Array.from({ length: item.dots }).map((_, index) => (
-                    <span
-                      key={`${item.key}-${index}`}
-                      className={cn("h-3 w-3 rounded-full border border-background/40", item.color)}
-                    />
-                  ))
-                )}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                {sourceDotData.map((item) => (
-                  <span key={item.key} className="inline-flex items-center gap-1">
-                    <span className={cn("h-2.5 w-2.5 rounded-full", item.color)} />
-                    {item.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-background/60 p-4 shadow-card">
-              <div className="text-xs text-muted-foreground">{rangeLabel}</div>
-              <h3 className="mt-2 text-sm font-semibold">Closed Tickets by Priority</h3>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {priorityDotData.flatMap((item) =>
-                  Array.from({ length: item.dots }).map((_, index) => (
-                    <span
-                      key={`${item.key}-${index}`}
-                      className={cn("h-3 w-3 rounded-full border border-background/40", item.color)}
-                    />
-                  ))
-                )}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                {priorityDotData.map((item) => (
-                  <span key={item.key} className="inline-flex items-center gap-1">
-                    <span className={cn("h-2.5 w-2.5 rounded-full", item.color)} />
-                    {item.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </section>
         </main>
       </div>
       <Dialog open={isThemeTicketsOpen} onOpenChange={setIsThemeTicketsOpen}>
