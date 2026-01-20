@@ -173,7 +173,7 @@ const TrendsLegend = ({
       </div>
     </div>
     <div className="mt-1 flex justify-center">
-      <span className="text-xs font-semibold text-muted-foreground">Click legend to show/hide</span>
+      <span className="text-xs font-semibold text-muted-foreground">Click legend elements to show/hide</span>
     </div>
   </div>
 );
@@ -661,7 +661,7 @@ function TrendsCardComponent({
         <Button
           variant="secondary"
           size="sm"
-          className="absolute right-10 top-2 z-40 h-7 px-2 text-[11px] shadow-sm"
+          className="absolute right-4 top-2 z-40 h-7 px-2 text-[11px] shadow-sm"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => setIsExpanded(true)}
         >
@@ -791,11 +791,11 @@ function TrendsCardComponent({
     >
       <div className="flex w-full flex-col gap-1">
         {renderFilters()}
-        {!isExpanded && renderChart("h-[22rem]", true)}
-        <div className="mt-2">
+        {!isExpanded && renderChart("h-96", true)}
+        <div className="mt-1">
           <TrendsLegend visibility={seriesVisibility} onToggle={toggleSeries} />
         </div>
-        <div className="mt-2 text-sm font-semibold text-foreground text-center">{topSourceTheme}</div>
+        <div className="mt-1 text-sm font-semibold text-foreground text-center">{topSourceTheme}</div>
       </div>
       <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
         <DialogContent className="max-w-5xl">

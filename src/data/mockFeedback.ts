@@ -155,11 +155,11 @@ const RESOLUTION_NOTES = [
 
 const RESOLUTION_OWNERS = ['Alex', 'Jordan', 'Priya', 'Sam', 'Taylor', 'Kai', 'Morgan'];
 
-const INCIDENTS: Array<{ issueType: IssueType; keyword: string; days: number; chance: number }> = [
-  { issueType: 'performance', keyword: 'timeout', days: 3, chance: 0.35 },
-  { issueType: 'billing', keyword: 'payment', days: 4, chance: 0.3 },
-  { issueType: 'integration', keyword: 'webhook', days: 5, chance: 0.3 },
-  { issueType: 'reliability', keyword: 'outage', days: 3, chance: 0.25 },
+const INCIDENTS: Array<{ issueType: IssueType; keyword: string; chance: number }> = [
+  { issueType: 'performance', keyword: 'timeout', chance: 0.2 },
+  { issueType: 'billing', keyword: 'payment', chance: 0.2 },
+  { issueType: 'integration', keyword: 'webhook', chance: 0.2 },
+  { issueType: 'reliability', keyword: 'outage', chance: 0.15 },
 ];
 
 type OldTicket = {
@@ -561,23 +561,14 @@ const buildMockFeedback = (): TicketRecord[] => {
 
   const tagAssignments = assignTags();
 
-  const bucketWeights = [
-    { key: 'last24h', weight: 0.25, start: now - dayMs, end: now },
-    { key: 'last7d', weight: 0.25, start: now - 7 * dayMs, end: now - dayMs },
-    { key: 'last30d', weight: 0.25, start: now - 30 * dayMs, end: now - 7 * dayMs },
-    { key: 'older', weight: 0.25, start: now - 365 * dayMs, end: now - 30 * dayMs },
+  const bucketCounts = [
+    {
+      key: 'fullYear',
+      start: now - 365 * dayMs,
+      end: now,
+      count: totalEntries,
+    },
   ];
-  const bucketTotalWeight = bucketWeights.reduce((sum, item) => sum + item.weight, 0);
-  const bucketCounts = bucketWeights.map((bucket) => ({
-    ...bucket,
-    count: Math.floor((bucket.weight / bucketTotalWeight) * totalEntries),
-  }));
-  let assignedBuckets = bucketCounts.reduce((sum, bucket) => sum + bucket.count, 0);
-  while (assignedBuckets < totalEntries) {
-    const index = Math.floor(nextRandom() * bucketCounts.length);
-    bucketCounts[index].count += 1;
-    assignedBuckets += 1;
-  }
 
   const generateBucketTimestamps = (count: number, start: number, end: number, spikeDays: number) => {
     const timestamps: number[] = [];
@@ -588,14 +579,13 @@ const buildMockFeedback = (): TicketRecord[] => {
       spikes.push(start + dayIndex * dayMs);
     }
     for (let i = 0; i < count; i += 1) {
-      if (spikes.length && nextRandom() < 0.35) {
+      if (spikes.length && nextRandom() < 0.2) {
         const base = spikes[Math.floor(nextRandom() * spikes.length)];
         timestamps.push(base + Math.floor(nextRandom() * dayMs));
         continue;
       }
       if (end - start <= dayMs) {
-        const skew = Math.pow(nextRandom(), 2);
-        timestamps.push(end - skew * (end - start));
+        timestamps.push(start + Math.floor(nextRandom() * (end - start)));
         continue;
       }
       timestamps.push(start + Math.floor(nextRandom() * (end - start)));
@@ -604,12 +594,7 @@ const buildMockFeedback = (): TicketRecord[] => {
   };
 
   const timePool = bucketCounts.flatMap((bucket) =>
-    generateBucketTimestamps(
-      bucket.count,
-      bucket.start,
-      bucket.end,
-      bucket.key === 'older' ? 1 : 3
-    )
+    generateBucketTimestamps(bucket.count, bucket.start, bucket.end, 0)
   );
   const shuffledTimePool = shuffle(timePool);
 
@@ -687,8 +672,6 @@ const buildMockFeedback = (): TicketRecord[] => {
     const incident = INCIDENTS.find((entry) => entry.issueType === issueType);
     const keywordTokens: string[] = [];
     if (incident && nextRandom() < incident.chance) {
-      const windowMs = incident.days * dayMs;
-      timestampMs = now - Math.floor(nextRandom() * windowMs);
       keywordTokens.push(incident.keyword);
     }
     const tokens = tokenAssignments.get(i) ?? [];

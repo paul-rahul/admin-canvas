@@ -73,7 +73,7 @@ export function Header({
               className="px-2 py-1 rounded-md hover:text-foreground hover:bg-muted/30 transition"
               activeClassName="text-foreground bg-muted/40"
             >
-              PM Metrics
+              Business Metrics
             </NavLink>
           </nav>
         </div>

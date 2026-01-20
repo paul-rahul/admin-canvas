@@ -70,6 +70,11 @@ interface FeedbackTableProps {
   globalSource?: FeedbackSource | 'all';
   globalTime?: '24h' | '7d' | '30d' | 'all' | 'custom';
   globalCustomRange?: { from: Date | null; to: Date | null };
+  initialFiltersOverride?: Partial<TableFilters>;
+  disableUrlSync?: boolean;
+  stickyTableHeader?: boolean;
+  bodyScrollClassName?: string;
+  containerClassName?: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100];
@@ -185,11 +190,23 @@ function FeedbackTableComponent({
   globalSource,
   globalTime,
   globalCustomRange,
+  initialFiltersOverride,
+  disableUrlSync = false,
+  stickyTableHeader = false,
+  bodyScrollClassName,
+  containerClassName,
 }: FeedbackTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  const initialFilters = useMemo(() => parseFiltersFromSearch(window.location.search), []);
-  const hasQueryParams = useMemo(() => window.location.search.length > 1, []);
+  const initialFilters = useMemo(() => {
+    const base = disableUrlSync ? { ...DEFAULT_FILTERS } : parseFiltersFromSearch(window.location.search);
+    if (!initialFiltersOverride) return base;
+    return { ...base, ...initialFiltersOverride };
+  }, [disableUrlSync, initialFiltersOverride]);
+  const hasQueryParams = useMemo(
+    () => (!disableUrlSync ? window.location.search.length > 1 : false),
+    [disableUrlSync]
+  );
   const [filters, setFilters] = useState<TableFilters>(initialFilters);
   const [draftFilters, setDraftFilters] = useState<TableFilters>(initialFilters);
   const [isFilterOpen, setIsFilterOpen] = useState<'icon' | 'plus' | null>(null);
@@ -280,10 +297,11 @@ function FeedbackTableComponent({
   }, [searchInput]);
 
   useEffect(() => {
+    if (disableUrlSync) return;
     const query = serializeFiltersToSearch(filters);
     const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
     window.history.replaceState(null, '', nextUrl);
-  }, [filters]);
+  }, [disableUrlSync, filters]);
 
   useEffect(() => {
     if (!isFilterOpen) return;
@@ -1344,8 +1362,13 @@ function FeedbackTableComponent({
   }, [filters, sortKey, sortDir]);
 
   return (
-    <div className="glass rounded-xl overflow-hidden shadow-card opacity-0 animate-slide-up stagger-3">
-      <div className="px-4 py-2 border-b border-border/50">
+    <div
+      className={cn(
+        "glass rounded-xl overflow-hidden shadow-card opacity-0 animate-slide-up stagger-3",
+        containerClassName
+      )}
+    >
+      <div className="sticky top-0 z-20 bg-background px-4 py-2 border-b border-border/50 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <div className="min-w-[180px]">
             <h3 className="text-lg font-semibold">View Tickets</h3>
@@ -1591,10 +1614,15 @@ function FeedbackTableComponent({
           </div>
         )}
       </div>
-      <div className="overflow-x-auto">
+      <div className={cn("overflow-x-auto", bodyScrollClassName)}>
         <table className="w-full table-fixed">
           <thead>
-            <tr className="border-b border-border/50 bg-muted/30">
+            <tr
+              className={cn(
+                "border-b border-border/50 bg-muted",
+                stickyTableHeader && "sticky top-0 z-10"
+              )}
+            >
               <th className="w-[64px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Source</th>
               <th className="w-[240px] text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
               <th className="w-[90px] text-center px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Sentiment</th>
