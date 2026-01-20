@@ -264,24 +264,33 @@ const pickUpdatedAtMs = (
   nowMs: number,
   dayMs: number
 ) => {
+  // Ensure updatedAt is always >= createdAt and <= now
   let updatedAt = createdAtMs;
   if (status === 'unresolved' || status === 'in_progress') {
+    // For open tickets, updatedAt is recent (within last 7 days) or could be older
     const recentWindow = 7 * dayMs;
     updatedAt = Math.max(createdAtMs, nowMs - rng() * recentWindow);
     if (rng() < 0.15) {
+      // 15% chance of being older (up to 30 days ago)
       updatedAt = Math.max(createdAtMs, nowMs - rng() * 30 * dayMs);
     }
   } else {
-    const baseWindow = status === 'resolved' ? 14 * dayMs : 21 * dayMs;
-    updatedAt = createdAtMs + rng() * baseWindow;
-    if (rng() < 0.2) {
-      updatedAt = createdAtMs + rng() * 120 * dayMs;
-    }
-    if (updatedAt > nowMs) {
-      updatedAt = nowMs - rng() * 2 * dayMs;
+    // For closed tickets, updatedAt is after creation but before now
+    const timeSinceCreation = nowMs - createdAtMs;
+    if (timeSinceCreation > 0) {
+      const baseWindow = status === 'resolved' ? 14 * dayMs : 21 * dayMs;
+      updatedAt = createdAtMs + rng() * Math.min(baseWindow, timeSinceCreation);
+      if (rng() < 0.2 && timeSinceCreation > 120 * dayMs) {
+        // 20% chance of being much later (up to 120 days after creation)
+        updatedAt = createdAtMs + rng() * Math.min(120 * dayMs, timeSinceCreation);
+      }
+    } else {
+      // If createdAt is in the future (shouldn't happen), set updatedAt = createdAt
+      updatedAt = createdAtMs;
     }
   }
-  return Math.max(createdAtMs, updatedAt);
+  // Final safety check: ensure updatedAt is between createdAt and now
+  return Math.max(createdAtMs, Math.min(nowMs, updatedAt));
 };
 
 const randomId = (rng: () => number, min: number, max: number) =>
@@ -336,7 +345,13 @@ const buildResolution = (
   dayMs: number
 ): Resolution | undefined => {
   if (status !== 'resolved' && status !== 'ignored') return undefined;
-  const resolvedAtMs = createdAtMs + rng() * Math.max(dayMs, updatedAtMs - createdAtMs);
+  
+  // Ensure resolvedAt is always >= createdAt and <= updatedAt
+  const timeWindow = Math.max(dayMs, updatedAtMs - createdAtMs);
+  const resolvedAtMs = createdAtMs + rng() * timeWindow;
+  // Ensure resolvedAt doesn't exceed updatedAt
+  const finalResolvedAt = Math.max(createdAtMs, Math.min(updatedAtMs, resolvedAtMs));
+  
   const resolutionCode =
     status === 'resolved'
       ? weightedPick(rng, [
@@ -352,7 +367,7 @@ const buildResolution = (
           { value: 'cannot_reproduce', weight: 0.2 },
         ]);
   return {
-    resolvedAt: new Date(Math.min(updatedAtMs, resolvedAtMs)).toISOString(),
+    resolvedAt: new Date(finalResolvedAt).toISOString(),
     resolvedBy: RESOLUTION_OWNERS[Math.floor(rng() * RESOLUTION_OWNERS.length)],
     resolutionCode,
     notes: RESOLUTION_NOTES[Math.floor(rng() * RESOLUTION_NOTES.length)],
@@ -434,7 +449,8 @@ const buildMockFeedback = (): TicketRecord[] => {
   const now = Date.now();
   const totalEntries = 6000;
   const dayMs = 24 * 60 * 60 * 1000;
-  // Data spans last 10 years with weighted distribution (more recent = more data)
+  // Data spans from 2012 to 2026 (14 years) with weighted distribution (more recent = more data)
+  const earliestDate = new Date('2012-01-01T00:00:00Z').getTime();
   let seed = 42;
 
   const nextRandom = () => {
@@ -562,14 +578,14 @@ const buildMockFeedback = (): TicketRecord[] => {
 
   const tagAssignments = assignTags();
 
-  // Distribute data across last 10 years with weighted distribution (more recent = more data)
-  const tenYearsMs = 10 * 365 * dayMs;
+  // Distribute data across 2012-2026 (14 years) with weighted distribution (more recent = more data)
+  const fourteenYearsMs = 14 * 365 * dayMs;
   const bucketCounts = [
     {
       key: 'lastYear',
       start: now - 365 * dayMs,
       end: now,
-      count: Math.floor(totalEntries * 0.4), // 40% in last year
+      count: Math.floor(totalEntries * 0.35), // 35% in last year
     },
     {
       key: 'year2to3',
@@ -584,10 +600,10 @@ const buildMockFeedback = (): TicketRecord[] => {
       count: Math.floor(totalEntries * 0.2), // 20% in years 4-6
     },
     {
-      key: 'year7to10',
-      start: now - tenYearsMs,
+      key: 'year7to14',
+      start: earliestDate,
       end: now - 6 * 365 * dayMs,
-      count: totalEntries - Math.floor(totalEntries * 0.4) - Math.floor(totalEntries * 0.25) - Math.floor(totalEntries * 0.2), // Remaining in years 7-10
+      count: totalEntries - Math.floor(totalEntries * 0.35) - Math.floor(totalEntries * 0.25) - Math.floor(totalEntries * 0.2), // Remaining in years 7-14 (2012-2018)
     },
   ];
 

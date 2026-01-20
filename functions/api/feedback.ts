@@ -29,13 +29,13 @@ export const onRequest: PagesFunction = async ({ env }) => {
     const itemsFromDb: FeedbackApiItem[] =
       results?.map((row) => JSON.parse(row.payload)) ?? [];
 
-    // Check if data exists and is recent (within last 10 years)
+    // Check if data exists and is recent (within 2012-2026 range)
     // If data is too old (from 1969) or empty, use fresh mockFeedback
     const now = Date.now();
-    const tenYearsAgo = now - 10 * 365 * 24 * 60 * 60 * 1000;
+    const earliestValidDate = new Date('2012-01-01T00:00:00Z').getTime();
     const hasRecentData = itemsFromDb.length > 0 && itemsFromDb.some((item) => {
       const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
-      return timestamp >= tenYearsAgo;
+      return timestamp >= earliestValidDate && timestamp <= now;
     });
 
     const items = hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);

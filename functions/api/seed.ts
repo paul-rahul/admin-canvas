@@ -50,7 +50,7 @@ export const onRequest: PagesFunction = async ({ env }) => {
         count: inserted,
         verified: results?.count ?? 0,
         source: 'mockFeedback',
-        message: `Successfully seeded ${inserted} entries with 10-year date distribution`,
+        message: `Successfully seeded ${inserted} entries with 14-year date distribution (2012-2026)`,
       }),
       {
         headers: {
