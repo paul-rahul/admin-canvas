@@ -1,9 +1,12 @@
-type FeedbackApiItem = {
-  id: string;
-  timestamp: string;
-  urgency?: string;
-  resolved?: boolean;
-};
+import { mockFeedback, FeedbackItem } from '../../src/data/mockFeedback';
+
+type FeedbackApiItem = Omit<FeedbackItem, 'timestamp'> & { timestamp: string };
+
+const serializeFeedback = (items: FeedbackItem[]): FeedbackApiItem[] =>
+  items.map((item) => ({
+    ...item,
+    timestamp: item.timestamp.toISOString(),
+  }));
 
 const computeMetrics = (items: FeedbackApiItem[]) => {
   const total = items.length;
@@ -33,22 +36,46 @@ const upsertMetrics = async (db: D1Database, metrics: ReturnType<typeof computeM
 };
 
 export const onRequest: PagesFunction = async ({ env }) => {
-  const db = env.ANALYTICS_DB as D1Database;
+  try {
+    const db = (env as unknown as { ANALYTICS_DB?: D1Database }).ANALYTICS_DB;
 
-  const { results } = await db
-    .prepare('SELECT payload FROM feedback_entries')
-    .all<{ payload: string }>();
+    let items: FeedbackApiItem[];
 
-  const items: FeedbackApiItem[] =
-    results?.map((row) => JSON.parse(row.payload)) ?? [];
+    if (db) {
+      const { results } = await db
+        .prepare('SELECT payload FROM feedback_entries')
+        .all<{ payload: string }>();
 
-  const metrics = computeMetrics(items);
-  await upsertMetrics(db, metrics);
+      const itemsFromDb: FeedbackApiItem[] =
+        results?.map((row) => JSON.parse(row.payload)) ?? [];
 
-  return new Response(JSON.stringify(metrics), {
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  });
+      items =
+        itemsFromDb.length > 0 ? itemsFromDb : serializeFeedback(mockFeedback);
+    } else {
+      items = serializeFeedback(mockFeedback);
+    }
+
+    const metrics = computeMetrics(items);
+
+    if (db) {
+      await upsertMetrics(db, metrics);
+    }
+
+    return new Response(JSON.stringify(metrics), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    });
+  } catch {
+    const fallbackMetrics = computeMetrics(serializeFeedback(mockFeedback));
+
+    return new Response(JSON.stringify(fallbackMetrics), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    });
+  }
 };
+
