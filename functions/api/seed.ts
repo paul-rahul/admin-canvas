@@ -22,23 +22,28 @@ export const onRequest: PagesFunction = async ({ env }) => {
 
     const items = serializeFeedback();
 
-    // Use batch inserts for better performance
-    const stmt = db.prepare(
-      'INSERT INTO feedback_entries (id, payload) VALUES (?1, ?2)'
-    );
-
-    // Process in batches of 100 to avoid hitting D1 limits
-    const batchSize = 100;
+    // Use D1 batch() method with smaller batches to avoid rate limits
+    // D1 allows up to 50 statements per batch, so we'll use 40 to be safe
+    const batchSize = 40;
     let inserted = 0;
+    
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
-      const batchPromises = batch.map((item) => 
+      
+      // Use D1's batch() method which executes all statements in a single transaction
+      const statements = batch.map((item) =>
         db.prepare('INSERT OR REPLACE INTO feedback_entries (id, payload) VALUES (?1, ?2)')
           .bind(item.id, JSON.stringify(item))
-          .run()
       );
-      await Promise.all(batchPromises);
+      
+      await db.batch(statements);
       inserted += batch.length;
+      
+      // Add a small delay between batches to avoid rate limiting
+      // Only delay every 10 batches to speed things up
+      if ((i / batchSize) % 10 === 0 && i + batchSize < items.length) {
+        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay every 10 batches
+      }
     }
 
     // Verify the data was inserted
