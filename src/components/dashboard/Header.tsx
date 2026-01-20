@@ -7,6 +7,7 @@ import { NavLink } from '@/components/NavLink';
 interface HeaderProps {
   onRefresh: () => void;
   needsAttentionContent?: React.ReactNode;
+  insightsContent?: React.ReactNode;
   overlayLock?: boolean;
   lastUpdatedAt?: Date | null;
   alertCount?: number;
@@ -15,14 +16,18 @@ interface HeaderProps {
 export function Header({
   onRefresh,
   needsAttentionContent,
+  insightsContent,
   overlayLock = false,
   lastUpdatedAt,
   alertCount = 0,
 }: HeaderProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLButtonElement | null>(null);
+  const insightsRef = useRef<HTMLDivElement | null>(null);
+  const insightsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -44,9 +49,23 @@ export function Header({
     return () => window.removeEventListener('mousedown', handleClose);
   }, [isOverlayOpen, overlayLock]);
 
+  useEffect(() => {
+    if (!isInsightsOpen) return;
+    const handleClose = (event: MouseEvent) => {
+      if (overlayLock) return;
+      const target = event.target as Node;
+      if (insightsRef.current?.contains(target) || insightsButtonRef.current?.contains(target)) {
+        return;
+      }
+      setIsInsightsOpen(false);
+    };
+    window.addEventListener('mousedown', handleClose);
+    return () => window.removeEventListener('mousedown', handleClose);
+  }, [isInsightsOpen, overlayLock]);
+
   return (
     <header className="glass sticky top-0 z-50 px-6 py-2 border-b border-border/50">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center glow-primary">
@@ -78,7 +97,7 @@ export function Header({
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-1 justify-center -ml-10">
           <div className="text-xs text-muted-foreground">
             Last updated:{' '}
             <span className="font-semibold text-foreground">
@@ -93,14 +112,61 @@ export function Header({
           >
             <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
+        </div>
 
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border/90 shadow-[0_0_0_1px_hsl(var(--border)/0.6)]"
+          >
+            Help Center
+          </Button>
+          <div className="relative">
+            <Button
+              ref={insightsButtonRef}
+              variant="outline"
+              size="sm"
+              className="border-border/90 shadow-[0_0_0_1px_hsl(var(--border)/0.6)]"
+              onClick={() => {
+                setIsInsightsOpen((prev) => !prev);
+                setIsOverlayOpen(false);
+              }}
+              aria-expanded={isInsightsOpen}
+              aria-label="Toggle Insights overlay"
+            >
+              Insights
+            </Button>
+            {isInsightsOpen && insightsContent && (
+              <div
+                ref={insightsRef}
+                className="absolute right-0 top-full mt-2 w-[min(480px,90vw)] z-50"
+              >
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-3 top-3 z-10 h-8 w-8 bg-background/90 text-foreground shadow-sm ring-1 ring-border hover:bg-background"
+                    onClick={() => setIsInsightsOpen(false)}
+                    aria-label="Close Insights overlay"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  {insightsContent}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="relative">
             <Button
               ref={bellRef}
               variant="ghost"
               size="icon"
               className="relative bg-warning/20 text-warning hover:bg-warning/30 shadow-[0_0_16px_hsl(var(--warning)/0.6)] ring-1 ring-warning/50"
-              onClick={() => setIsOverlayOpen((prev) => !prev)}
+              onClick={() => {
+                setIsOverlayOpen((prev) => !prev);
+                setIsInsightsOpen(false);
+              }}
               aria-expanded={isOverlayOpen}
               aria-label="Toggle Needs Attention overlay"
             >
@@ -114,7 +180,7 @@ export function Header({
             {isOverlayOpen && needsAttentionContent && (
               <div
                 ref={overlayRef}
-                className="absolute right-0 top-full mt-2 w-[min(980px,90vw)] z-50"
+                className="absolute right-0 top-full mt-2 w-[min(480px,96vw)] z-50"
               >
                 <div className="relative">
                   <Button

@@ -304,12 +304,17 @@ const Index = () => {
     () => (
       <NeedsAttentionOverlay
         data={needsAttentionData}
+        variant="alerts"
         onAlertSelect={(alert) => {
           setSearchQuery(alert.title);
           setSelectedItem(alert.entry);
         }}
       />
     ),
+    [needsAttentionData]
+  );
+  const insightsContent = useMemo(
+    () => <NeedsAttentionOverlay data={needsAttentionData} variant="insights" />,
     [needsAttentionData]
   );
 
@@ -328,6 +333,7 @@ const Index = () => {
           lastUpdatedAt={lastUpdatedAt}
           alertCount={needsAttentionData.alerts.length}
           needsAttentionContent={needsAttentionContent}
+          insightsContent={insightsContent}
         />
 
         <main className="container mx-auto px-6 pt-3 pb-0 space-y-6">

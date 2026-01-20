@@ -31,7 +31,7 @@ import { Calendar as CalendarIcon, Info, TrendingDown, TrendingUp } from 'lucide
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-type TimeRangeKey = '7d' | '30d' | '90d' | 'custom';
+type TimeRangeKey = '7d' | '30d' | '90d' | 'all' | 'custom';
 type SourceKey = FeedbackItem['source'] | 'all';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -40,6 +40,7 @@ const TIME_RANGE_OPTIONS: Array<{ value: TimeRangeKey; label: string; days: numb
   { value: '7d', label: 'Last 7d', days: 7 },
   { value: '30d', label: 'Last 30d', days: 30 },
   { value: '90d', label: 'Last 90d', days: 90 },
+  { value: 'all', label: 'All', days: 0 },
   { value: 'custom', label: 'Custom', days: 30 },
 ];
 
@@ -462,13 +463,19 @@ const BacklogAgingTooltip = ({
 
 
 export default function PmMetrics() {
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 24 }, (_, index) => currentYear - index);
+  }, []);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<TimeRangeKey>('30d');
+  const [timeRange, setTimeRange] = useState<TimeRangeKey>('7d');
   const [compareEnabled, setCompareEnabled] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<SourceKey>('all');
   const [customStart, setCustomStart] = useState<Date | null>(null);
   const [customEnd, setCustomEnd] = useState<Date | null>(null);
+  const [customStartMonth, setCustomStartMonth] = useState<Date | undefined>(undefined);
+  const [customEndMonth, setCustomEndMonth] = useState<Date | undefined>(undefined);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [negativeSeriesVisibility, setNegativeSeriesVisibility] = useState({
     total: true,
@@ -505,6 +512,18 @@ export default function PmMetrics() {
     void loadFeedback();
   }, [loadFeedback]);
 
+  useEffect(() => {
+    if (customStart) {
+      setCustomStartMonth(customStart);
+    }
+  }, [customStart]);
+
+  useEffect(() => {
+    if (customEnd) {
+      setCustomEndMonth(customEnd);
+    }
+  }, [customEnd]);
+
   const toggleNegativeSeries = useCallback(
     (key: keyof typeof negativeSeriesVisibility) => {
       setNegativeSeriesVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -515,6 +534,7 @@ export default function PmMetrics() {
   const getTableTimePreset = (range: TimeRangeKey): TimePreset => {
     if (range === '7d') return '7d';
     if (range === '30d') return '30d';
+    if (range === 'all') return 'all';
     return 'custom';
   };
 
@@ -535,11 +555,18 @@ export default function PmMetrics() {
     if (timeRange === 'custom' && customStart && customEnd) {
       return { startMs: customStart.getTime(), endMs: customEnd.getTime() };
     }
+    if (timeRange === 'all' && feedback.length) {
+      const minCreated = feedback.reduce((min, entry) => {
+        const createdMs = getCreatedMs(entry);
+        return createdMs < min ? createdMs : min;
+      }, Number.POSITIVE_INFINITY);
+      return { startMs: minCreated, endMs: now.getTime() };
+    }
     const option = TIME_RANGE_OPTIONS.find((entry) => entry.value === timeRange) ?? TIME_RANGE_OPTIONS[1];
     const endMs = now.getTime();
     const startMs = endMs - option.days * DAY_MS;
     return { startMs, endMs };
-  }, [timeRange, customStart, customEnd]);
+  }, [timeRange, customStart, customEnd, feedback]);
 
   const previousBounds = useMemo(() => {
     if (!compareEnabled) return null;
@@ -586,7 +613,14 @@ export default function PmMetrics() {
 
   const rangeLabel = useMemo(() => {
     const option = TIME_RANGE_OPTIONS.find((entry) => entry.value === timeRange);
-    const label = timeRange === 'custom' ? 'Custom range' : option ? `Last ${option.days} days` : 'Custom range';
+    const label =
+      timeRange === 'custom'
+        ? 'Custom range'
+        : timeRange === 'all'
+        ? 'All time'
+        : option
+        ? `Last ${option.days} days`
+        : 'Custom range';
     const startLabel = format(new Date(timeBounds.startMs), 'MMM d, yyyy');
     const endLabel = format(new Date(timeBounds.endMs), 'MMM d, yyyy');
     return `${label} (${startLabel} - ${endLabel})`;
@@ -626,6 +660,7 @@ export default function PmMetrics() {
     () => (
       <NeedsAttentionOverlay
         data={needsAttentionData}
+        variant="alerts"
         onAlertSelect={(alert) => {
           const query = serializeFiltersToSearch({
             ...DEFAULT_FILTERS,
@@ -637,6 +672,10 @@ export default function PmMetrics() {
         }}
       />
     ),
+    [needsAttentionData]
+  );
+  const insightsContent = useMemo(
+    () => <NeedsAttentionOverlay data={needsAttentionData} variant="insights" />,
     [needsAttentionData]
   );
 
@@ -1102,6 +1141,7 @@ export default function PmMetrics() {
           onRefresh={loadFeedback}
           lastUpdatedAt={lastUpdatedAt}
           needsAttentionContent={needsAttentionContent}
+          insightsContent={insightsContent}
           alertCount={needsAttentionData.alerts.length}
         />
         <section className="fixed top-[56px] left-0 right-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur">
@@ -1141,14 +1181,46 @@ export default function PmMetrics() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="w-auto p-2">
-                        <Calendar
-                          mode="single"
-                          selected={customStart ?? undefined}
-                          onSelect={(date) => {
-                            const nextDate = date ? applyTimeToDate(date, formatTime(customStart)) : null;
-                            setCustomStart(nextDate);
-                          }}
-                        />
+                        <div className="flex gap-3">
+                          <div className="h-full max-h-[300px] w-20 overflow-y-auto rounded-md border border-border/60 bg-background/60 p-1 text-[11px]">
+                            {yearOptions.map((year) => {
+                              const isActive = (customStartMonth ?? customStart)?.getFullYear() === year;
+                              return (
+                                <button
+                                  key={year}
+                                  type="button"
+                                  className={cn(
+                                    "w-full rounded px-2 py-1 text-left transition",
+                                    isActive
+                                      ? "bg-primary/20 text-foreground"
+                                      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                                  )}
+                                  onClick={() => {
+                                    const base = customStartMonth ?? customStart ?? new Date();
+                                    const next = new Date(base);
+                                    next.setFullYear(year);
+                                    setCustomStartMonth(next);
+                                  }}
+                                >
+                                  {year}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <Calendar
+                            mode="single"
+                            selected={customStart ?? undefined}
+                            onSelect={(date) => {
+                              const nextDate = date ? applyTimeToDate(date, formatTime(customStart)) : null;
+                              setCustomStart(nextDate);
+                              if (date) {
+                                setCustomStartMonth(date);
+                              }
+                            }}
+                            month={customStartMonth}
+                            onMonthChange={setCustomStartMonth}
+                          />
+                        </div>
                       </PopoverContent>
                     </Popover>
                     <Input
@@ -1179,14 +1251,46 @@ export default function PmMetrics() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="w-auto p-2">
-                        <Calendar
-                          mode="single"
-                          selected={customEnd ?? undefined}
-                          onSelect={(date) => {
-                            const nextDate = date ? applyTimeToDate(date, formatTime(customEnd)) : null;
-                            setCustomEnd(nextDate);
-                          }}
-                        />
+                        <div className="flex gap-3">
+                          <div className="h-full max-h-[300px] w-20 overflow-y-auto rounded-md border border-border/60 bg-background/60 p-1 text-[11px]">
+                            {yearOptions.map((year) => {
+                              const isActive = (customEndMonth ?? customEnd)?.getFullYear() === year;
+                              return (
+                                <button
+                                  key={year}
+                                  type="button"
+                                  className={cn(
+                                    "w-full rounded px-2 py-1 text-left transition",
+                                    isActive
+                                      ? "bg-primary/20 text-foreground"
+                                      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                                  )}
+                                  onClick={() => {
+                                    const base = customEndMonth ?? customEnd ?? new Date();
+                                    const next = new Date(base);
+                                    next.setFullYear(year);
+                                    setCustomEndMonth(next);
+                                  }}
+                                >
+                                  {year}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <Calendar
+                            mode="single"
+                            selected={customEnd ?? undefined}
+                            onSelect={(date) => {
+                              const nextDate = date ? applyTimeToDate(date, formatTime(customEnd)) : null;
+                              setCustomEnd(nextDate);
+                              if (date) {
+                                setCustomEndMonth(date);
+                              }
+                            }}
+                            month={customEndMonth}
+                            onMonthChange={setCustomEndMonth}
+                          />
+                        </div>
                       </PopoverContent>
                     </Popover>
                     <Input
@@ -1295,8 +1399,7 @@ export default function PmMetrics() {
                 subtextClassName="min-h-[16px] line-clamp-1"
                 tooltip={
                   <div className="space-y-1 text-xs">
-                    <p>• Median days between createdAt and resolvedAt/updatedAt</p>
-                    <p>• Includes only resolved P0/P1 tickets</p>
+                    <p>Median days between creation and resolution</p>
                   </div>
                 }
               />
@@ -1725,7 +1828,7 @@ export default function PmMetrics() {
                   </span>
                 </div>
               </div>
-              <div className="rounded-xl border border-border/60 bg-background/60 p-4 shadow-card">
+              <div className="rounded-xl border border-border/60 bg-background/60 p-4 shadow-card h-full">
                 <h3 className="text-sm font-semibold">Resolution Rationale</h3>
                 <div className="mt-4 grid grid-cols-[minmax(0,1fr)_72px_64px] gap-3 text-xs text-muted-foreground">
                   <span>Resolution</span>
@@ -1763,7 +1866,7 @@ export default function PmMetrics() {
                 </div>
               </div>
               <div className="space-y-4">
-              <div className="rounded-xl border border-border/60 p-4">
+              <div className="rounded-xl border border-border/60 p-4 flex flex-col h-full">
                 <div className="mb-2 flex items-center gap-2">
                   <h3 className="text-sm font-semibold">Backlog Aging</h3>
                   <TooltipProvider>
@@ -1783,7 +1886,7 @@ export default function PmMetrics() {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                  <div className="mt-6 flex-1">
+                  <div className="mt-6 flex-1 min-h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={backlogAging} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
                       <CartesianGrid stroke="transparent" />

@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Calendar } from '@/components/ui/calendar';
+import { YearScrollCalendar } from '@/components/ui/year-scroll-calendar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
@@ -857,10 +857,9 @@ function FeedbackTableComponent({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-auto p-2">
-                          <Calendar
-                            mode="single"
-                            selected={customFrom ?? undefined}
-                            onSelect={(date) => {
+                          <YearScrollCalendar
+                            value={customFrom}
+                            onChange={(date) => {
                               const nextDate = date ? applyTimeToDate(date, formatTime(customFrom)) : null;
                               updateCustomDateTime('startDate', nextDate);
                             }}
@@ -895,10 +894,9 @@ function FeedbackTableComponent({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-auto p-2">
-                          <Calendar
-                            mode="single"
-                            selected={customTo ?? undefined}
-                            onSelect={(date) => {
+                          <YearScrollCalendar
+                            value={customTo}
+                            onChange={(date) => {
                               const nextDate = date ? applyTimeToDate(date, formatTime(customTo)) : null;
                               updateCustomDateTime('endDate', nextDate);
                             }}

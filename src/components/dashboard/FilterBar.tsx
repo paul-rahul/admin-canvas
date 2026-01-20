@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button as UiButton } from '@/components/ui/button';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
+import { YearScrollCalendar } from '@/components/ui/year-scroll-calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sourceConfig, FeedbackSource } from '@/data/mockFeedback';
 import { cn } from '@/lib/utils';
@@ -126,10 +126,9 @@ function FilterBarComponent({
                       </UiButton>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-auto p-2">
-                      <Calendar
-                        mode="single"
-                        selected={customRange.from ?? undefined}
-                        onSelect={(date) => {
+                      <YearScrollCalendar
+                        value={customRange.from}
+                        onChange={(date) => {
                           const nextDate = date
                             ? applyTimeToDate(date, formatTime(customRange.from))
                             : null;
@@ -166,10 +165,9 @@ function FilterBarComponent({
                       </UiButton>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-auto p-2">
-                      <Calendar
-                        mode="single"
-                        selected={customRange.to ?? undefined}
-                        onSelect={(date) => {
+                      <YearScrollCalendar
+                        value={customRange.to}
+                        onChange={(date) => {
                           const nextDate = date
                             ? applyTimeToDate(date, formatTime(customRange.to))
                             : null;
