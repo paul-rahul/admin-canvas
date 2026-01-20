@@ -114,12 +114,38 @@ export const onRequest: PagesFunction = async ({ env }) => {
     .prepare('SELECT payload FROM feedback_entries')
     .all<{ payload: string }>();
 
-  const items = (results?.map((row) => JSON.parse(row.payload)) ??
+  const itemsFromDb = (results?.map((row) => JSON.parse(row.payload)) ??
     []) as FeedbackApiItem[];
 
-  // Fallback to mock data if DB is empty (e.g. before seeding)
+  // Use same aggressive check as feedback endpoint
+  const now = Date.now();
+  const earliestValidDate = new Date('2012-01-01T00:00:00Z').getTime();
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  
+  const hasOldEntries = itemsFromDb.some((item) => {
+    const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+    return timestamp > 0 && timestamp < earliestValidDate;
+  });
+  
+  const last24hCount = itemsFromDb.filter((item) => {
+    const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+    return timestamp >= oneDayAgo && timestamp <= now;
+  }).length;
+  
+  const last7dCount = itemsFromDb.filter((item) => {
+    const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+    return timestamp >= sevenDaysAgo && timestamp <= now;
+  }).length;
+  
+  const hasRecentData = !hasOldEntries && 
+    itemsFromDb.length > 0 && 
+    last7dCount >= 50 && 
+    last24hCount >= 10;
+
+  // Fallback to mock data if DB is empty or has old data
   const sourceItems =
-    items.length > 0 ? items : serializeFeedback(mockFeedback);
+    hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);
 
   const insights = await buildInsights(env.AI as AiBinding | undefined, sourceItems);
 

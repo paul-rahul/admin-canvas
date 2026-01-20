@@ -29,17 +29,29 @@ export const onRequest: PagesFunction = async ({ env }) => {
     const itemsFromDb: FeedbackApiItem[] =
       results?.map((row) => JSON.parse(row.payload)) ?? [];
 
-    // Check if data exists and is recent (within 2012-2026 range)
-    // If data is too old (from 1969) or empty, use fresh mockFeedback
+    // AGGRESSIVE CHECK: Reject ANY data that has entries before 2012 or missing recent entries
+    // If data is too old or empty, immediately use fresh mockFeedback
     const now = Date.now();
     const earliestValidDate = new Date('2012-01-01T00:00:00Z').getTime();
     const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
     
-    // Check if we have recent data - at least 80% of entries should be from 2012+
-    // AND at least some entries should be from the last year
-    const recentCount = itemsFromDb.filter((item) => {
+    // Check for ANY entries before 2012 - if found, immediately reject
+    const hasOldEntries = itemsFromDb.some((item) => {
       const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
-      return timestamp >= earliestValidDate && timestamp <= now;
+      return timestamp > 0 && timestamp < earliestValidDate;
+    });
+    
+    // Count recent entries
+    const last24hCount = itemsFromDb.filter((item) => {
+      const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      return timestamp >= oneDayAgo && timestamp <= now;
+    }).length;
+    
+    const last7dCount = itemsFromDb.filter((item) => {
+      const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      return timestamp >= sevenDaysAgo && timestamp <= now;
     }).length;
     
     const lastYearCount = itemsFromDb.filter((item) => {
@@ -47,10 +59,13 @@ export const onRequest: PagesFunction = async ({ env }) => {
       return timestamp >= oneYearAgo && timestamp <= now;
     }).length;
     
-    // Require: 80% recent AND at least 100 entries from last year (to ensure fresh data)
-    const hasRecentData = itemsFromDb.length > 0 && 
-      recentCount > itemsFromDb.length * 0.8 && 
-      lastYearCount >= 100;
+    // REJECT if: has old entries OR missing required recent entries
+    // We need at least 50 entries in last 7d and 10 in last 24h to trust the data
+    const hasRecentData = !hasOldEntries && 
+      itemsFromDb.length > 0 && 
+      last7dCount >= 50 && 
+      last24hCount >= 10 &&
+      lastYearCount >= 200;
 
     const items = hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);
 
