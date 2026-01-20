@@ -116,11 +116,14 @@ export function Header({
 
         <div className="flex items-center gap-4">
           <Button
+            asChild
             variant="outline"
             size="sm"
             className="border-border/90 shadow-[0_0_0_1px_hsl(var(--border)/0.6)]"
           >
-            Help Center
+            <a href="/help.html" target="_blank" rel="noreferrer">
+              Help Center
+            </a>
           </Button>
           <div className="relative">
             <Button

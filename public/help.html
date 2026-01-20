@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cerebro Help Center</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+          Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        background: #0b0f1a;
+        color: #e6edf3;
+        line-height: 1.55;
+      }
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 36px 24px 60px;
+      }
+      h1,
+      h2,
+      h3 {
+        margin: 0 0 12px;
+        color: #f8fafc;
+      }
+      h1 {
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+      h2 {
+        font-size: 20px;
+        margin-top: 28px;
+      }
+      h3 {
+        font-size: 16px;
+        margin-top: 16px;
+      }
+      p {
+        margin: 0 0 12px;
+        color: #cbd5f5;
+      }
+      ul {
+        margin: 0 0 12px 20px;
+        padding: 0;
+      }
+      li {
+        margin: 6px 0;
+      }
+      .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+        font-size: 12px;
+        margin-right: 6px;
+      }
+      .divider {
+        height: 1px;
+        background: rgba(148, 163, 184, 0.2);
+        margin: 18px 0;
+      }
+      code {
+        background: rgba(148, 163, 184, 0.12);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Cerebro Help Center</h1>
+      <p>
+        This guide walks you through every major feature of the Cerebro dashboard,
+        including navigation, filters, cards, charts, overlays, and ticket workflows.
+        Use it as a full reference when onboarding or troubleshooting.
+      </p>
+
+      <div class="divider"></div>
+
+      <h2>Navigation</h2>
+      <ul>
+        <li>
+          <strong>Overview</strong> is the triage surface for what needs attention now.
+        </li>
+        <li>
+          <strong>Business Metrics</strong> is the longitudinal PM view (weekly/monthly signals).
+        </li>
+        <li>
+          Click the <strong>Cerebro</strong> text in the top bar to return to Overview.
+        </li>
+        <li>
+          Use the page-specific filters and cards to deep-link into tickets.
+        </li>
+      </ul>
+
+      <h2>Top Bar Actions</h2>
+      <ul>
+        <li>
+          <strong>Last updated</strong> + refresh icon: refreshes data and updates the timestamp.
+        </li>
+        <li>
+          The timestamp is fixed until you refresh again.
+        </li>
+        <li>
+          <strong>Help Center</strong>: opens this guide in a new tab.
+        </li>
+        <li>
+          <strong>Insights</strong> button: opens an overlay with AI Insights and Emerging Issues.
+        </li>
+        <li>
+          <strong>Bell icon</strong>: opens the Needs Attention overlay with Active Alerts.
+        </li>
+        <li>
+          Clicking outside any overlay closes it. Use the close button if shown.
+        </li>
+      </ul>
+
+      <h2>Overlays</h2>
+      <h3>Insights Overlay</h3>
+      <ul>
+        <li>Contains <strong>AI Insights</strong> and <strong>Emerging Issues</strong>.</li>
+        <li>Emerging Issues compares the last 7 days to the prior 7 days.</li>
+        <li>Hover the info icon to see how Emerging Issues are computed.</li>
+      </ul>
+      <h3>Needs Attention Overlay (Bell)</h3>
+      <ul>
+        <li>Shows <strong>Active Alerts</strong> (unresolved Critical/High tickets from last 7 days).</li>
+        <li>Clicking an alert filters the dashboard to the relevant issue.</li>
+        <li>Alerts are sorted by urgency (Critical first) and then oldest first.</li>
+      </ul>
+
+      <h2>Overview Page</h2>
+      <h3>Global Filters</h3>
+      <ul>
+        <li><span class="tag">Source</span> filter (all sources or specific channels).</li>
+        <li><span class="tag">Time</span> presets (Last 24h/7d/30d/All/Custom).</li>
+        <li>Custom range uses a date + time picker with a year scroll list.</li>
+        <li>Dragging across the Trends chart also updates the time range.</li>
+      </ul>
+
+      <h3>KPI Cards</h3>
+      <ul>
+        <li>Ticket Counter, Critical Issues, Theme Distribution, and related KPIs.</li>
+        <li>Info icons explain calculation logic.</li>
+        <li>Counts respect the global Source and Time filters.</li>
+      </ul>
+
+      <h3>Trends Chart</h3>
+      <ul>
+        <li>Drag across the chart to select a time range.</li>
+        <li>Legend items are clickable to show/hide trendlines.</li>
+        <li>Hover tooltips show exact values at the cursor.</li>
+        <li>Use the expand button to open the chart in a larger view.</li>
+        <li>Click legend text to toggle series visibility (Total, Priority, Negative).</li>
+      </ul>
+
+      <h2>View Tickets Table</h2>
+      <ul>
+        <li>Columns include Source, Description, Sentiment, Priority, Urgency, User Type,
+          Issue Type, Owner, Created, Updated, Status, and Link.</li>
+        <li>Search is local to the table and applies after filters.</li>
+        <li>Filter panel supports multi-select filters and custom time ranges.</li>
+        <li>Filters apply only after clicking <strong>Apply filters</strong>.</li>
+        <li><strong>Remove All</strong> clears all filters to show all tickets.</li>
+        <li>Sort options include Creation Date, Updated, Urgency, Sentiment, and Priority.</li>
+        <li><strong>Download CSV</strong> exports the currently filtered + sorted rows.</li>
+        <li>Filter chips show active selections and can be removed individually.</li>
+        <li>Time filtering uses <strong>Created</strong> timestamps by default.</li>
+      </ul>
+
+      <h3>Ticket Detail Modal</h3>
+      <ul>
+        <li>Click any row to open ticket details.</li>
+        <li>Details include sentiment, urgency, user type, tags, created/updated, and link badges.</li>
+        <li>Copyable ticket ID and optional media link are shown when available.</li>
+        <li>Click outside the modal to close.</li>
+        <li>External links (Source/JIRA/Media) open in a new tab.</li>
+      </ul>
+
+      <h2>Business Metrics Page</h2>
+      <h3>Global Controls</h3>
+      <ul>
+        <li>Time range: Last 7d / Last 30d / Last 90d / All / Custom.</li>
+        <li>Source filter for all metrics on the page.</li>
+        <li>Compare to previous period toggle.</li>
+        <li>Custom range uses the same year-scroll datepicker as Overview.</li>
+      </ul>
+
+      <h3>Product Health Snapshot</h3>
+      <ul>
+        <li>High-Priority Open, Negative Feedback, Resolution Time, Escalating Theme, Ticket Volume.</li>
+        <li>Each card shows current value and delta vs previous period.</li>
+        <li>Deltas are computed using the immediately preceding time window.</li>
+      </ul>
+
+      <h3>Customer Impact & Sentiment</h3>
+      <ul>
+        <li>Negative Feedback Trend (legend click to show/hide).</li>
+        <li>Segment Impact (P0+P1 only).</li>
+        <li>Themes list with “View tickets” to open the View Tickets modal.</li>
+        <li>“View tickets” respects the current time range and source filter.</li>
+      </ul>
+
+      <h3>Theme & Area Deep Dive</h3>
+      <ul>
+        <li>Volume Distribution, Priority Heatmap, User Distribution (theme vs user type).</li>
+        <li>Charts have consistent hover styling and legend emphasis.</li>
+        <li>Priority Heatmap shows open tickets by theme and priority band.</li>
+      </ul>
+
+      <h3>Product Quality & Stability</h3>
+      <ul>
+        <li>Ticket Status by Issue Type, Resolution Rationale, Backlog Aging, Closed Tickets by Priority.</li>
+        <li>Backlog Aging groups open tickets into age buckets (0–3d, 4–7d, 8–14d, 15d+).</li>
+      </ul>
+
+      <h2>Filtering and Sync Behavior</h2>
+      <ul>
+        <li>Global filters affect KPI cards, charts, and aggregated metrics.</li>
+        <li>Local table filters are independent and applied only after “Apply filters”.</li>
+        <li>When the global filters change, the table syncs to reflect those changes.</li>
+        <li>Removing a chip updates the table immediately.</li>
+      </ul>
+
+      <h2>Common Workflows</h2>
+      <ul>
+        <li><strong>Investigate a spike:</strong> Drag the Trends chart to isolate the time window, then use View Tickets.</li>
+        <li><strong>Find top issues:</strong> Use Themes lists and click “View tickets”.</li>
+        <li><strong>Track critical backlog:</strong> Use Active Alerts and Backlog Aging.</li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <p>
+        If anything looks out of sync, hit refresh in the top bar and verify your
+        current filters. For help, return here via <strong>Help Center</strong>.
+      </p>
+    </div>
+  </body>
+</html>
