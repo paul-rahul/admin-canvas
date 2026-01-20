@@ -1,10 +1,10 @@
 # Project Overview
 - Project name: Cerebro
-- One-line goal: A product feedback dashboard with an Overview (triage) page and a PM Metrics page for longitudinal product health signals, backed by mock data and Cloudflare Workers/Pages APIs.
+- One-line goal: A product feedback dashboard with an Overview (triage) page and a Business Metrics page for longitudinal product health signals, backed by mock data and Cloudflare Workers/Pages APIs.
 - Explicit non-goals / out-of-scope items:
   - No real third-party integrations (all data is mock in this codebase).
   - No authentication or user accounts.
-  - No backend persistence for feedback items beyond mock data (D1 is only used for metrics seed/demo).
+  - No backend persistence for feedback items beyond mock data (D1 is used only for metrics seed/demo).
 
 # Tech Stack
 - Language(s): TypeScript, SQL (D1 migration/seed)
@@ -23,27 +23,27 @@
 
 # Architecture
 - High-level components:
-  - Frontend SPA (React/Vite) with routes: Overview (`/`), PM Metrics (`/pm-metrics`), Themes (`/themes`), NotFound
-  - Shared topbar (`Header`) with refresh, bell overlay (Needs Attention), nav links
+  - Frontend SPA (React/Vite) with routes: Overview (`/`), Business Metrics (`/pm-metrics`), Themes (`/themes`), NotFound
+  - Shared topbar (`Header`) with refresh, bell overlay (Needs Attention), Insights overlay, Help Center
   - Mock data generator and schema (`src/data/mockFeedback.ts`)
   - Filtering logic for View Tickets (`src/utils/feedbackTableFilters.ts`)
   - Needs Attention overlay logic (`src/components/dashboard/NeedsAttentionOverlay.tsx`)
   - Cloudflare Pages Functions endpoints (`functions/api/*`)
   - Cloudflare Worker (`src/worker.ts`) that serves APIs and assets
 - Responsibility of each component:
-  - `Header`: topbar UI, refresh button, alert bell overlay positioning
-  - `NeedsAttentionOverlay`: renders Active Alerts + Emerging Issues + AI Insights overlay content
+  - `Header`: topbar UI, refresh button, help/insights/alert overlays
+  - `NeedsAttentionOverlay`: renders Active Alerts + Emerging Issues + AI Insights overlay content (variant-based)
   - `FeedbackTable`: View Tickets table, local filters, sorting, CSV export, ticket detail modal
-  - `TrendsCard`: Trends chart (absolute counts) with selection/toggle
+  - `TrendsCard`: Trends chart (absolute counts) with time slicing and legend toggles
   - `KpiStrip`: KPI cards row on Overview
-  - `PmMetrics`: PM Metrics dashboard with KPI row + charts/lists
+  - `PmMetrics`: Business Metrics dashboard with KPI row + charts/lists
   - `mockFeedback`: generates ~6000 tickets with enriched schema
   - `feedbackTableFilters`: filter state, URL parsing/serialization, client-side predicate
   - `functions/api/*` and `src/worker.ts`: API endpoints returning mock feedback/metrics/insights, optional Workers AI
 - End-to-end data flow (step-by-step):
   1. UI loads a page (`Index`, `PmMetrics`, etc.).
   2. Pages call `/api/feedback` (via fetch) to retrieve serialized `FeedbackItem` objects.
-  3. Client deserializes `timestamp` into `Date` and uses `createdAt`/`updatedAt` for filtering/sorting.
+  3. Client uses `createdAt`/`updatedAt` for filtering/sorting and deserializes `timestamp` into `Date` where needed.
   4. Overview uses filters to compute KPIs and trends; View Tickets uses `applyFilters`.
   5. Needs Attention overlay uses `buildNeedsAttentionData` on in-memory feedback.
   6. Optional APIs: `/api/metrics` and `/api/insights` compute metrics/insights (Workers AI if configured).
@@ -73,26 +73,50 @@
   - Purpose: Vite build config.
   - Key functions / classes / exports: Vite config.
   - Critical assumptions or invariants: UNKNOWN (not inspected).
-- `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`
-  - Purpose: TypeScript configuration.
+- `tsconfig.json`
+  - Purpose: Shared TypeScript config base.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `tsconfig.app.json`
+  - Purpose: TypeScript config for app build.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `tsconfig.node.json`
+  - Purpose: TypeScript config for tooling.
   - Key functions / classes / exports: N/A
   - Critical assumptions or invariants: UNKNOWN (not inspected).
 - `eslint.config.js`
   - Purpose: ESLint configuration.
   - Key functions / classes / exports: ESLint config.
   - Critical assumptions or invariants: UNKNOWN (not inspected).
-- `postcss.config.js`, `tailwind.config.ts`
-  - Purpose: CSS tooling configuration.
+- `postcss.config.js`
+  - Purpose: PostCSS config.
   - Key functions / classes / exports: N/A
-  - Critical assumptions or invariants: Tailwind is used throughout UI.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `tailwind.config.ts`
+  - Purpose: Tailwind configuration.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Tailwind classes are used throughout the UI.
 - `components.json`
   - Purpose: shadcn/ui configuration.
   - Key functions / classes / exports: N/A
   - Critical assumptions or invariants: UNKNOWN (not inspected).
-- `README.md`
-  - Purpose: Project documentation (THIS file).
+- `wrangler.toml`
+  - Purpose: Cloudflare Workers/Pages config.
   - Key functions / classes / exports: N/A
-  - Critical assumptions or invariants: Must be source of truth.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `vitest.config.ts`
+  - Purpose: Vitest config.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `scripts/seed-d1.sql`
+  - Purpose: Seed `feedback_metrics` table in D1.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: Table `feedback_metrics` exists.
+- `migrations/0001_init.sql`
+  - Purpose: D1 migration creating `feedback_metrics`.
+  - Key functions / classes / exports: N/A
+  - Critical assumptions or invariants: D1 database named in `wrangler.toml`.
 - `public/placeholder.svg`
   - Purpose: Placeholder asset.
   - Key functions / classes / exports: N/A
@@ -109,18 +133,14 @@
   - Purpose: Robots directive.
   - Key functions / classes / exports: N/A
   - Critical assumptions or invariants: UNKNOWN (not inspected).
-- `scripts/seed-d1.sql`
-  - Purpose: Seed `feedback_metrics` table in D1.
+- `public/help.html`
+  - Purpose: Help Center documentation (opens in a new tab).
   - Key functions / classes / exports: N/A
-  - Critical assumptions or invariants: Table `feedback_metrics` exists.
-- `migrations/0001_init.sql`
-  - Purpose: D1 migration creating `feedback_metrics`.
+  - Critical assumptions or invariants: Linked from `Header` Help Center button.
+- `README.md`
+  - Purpose: Project documentation (THIS file).
   - Key functions / classes / exports: N/A
-  - Critical assumptions or invariants: D1 database named in `wrangler.toml`.
-- `wrangler.toml`
-  - Purpose: Cloudflare Workers/Pages config.
-  - Key functions / classes / exports: N/A
-  - Critical assumptions or invariants: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: Must be source of truth for future sessions.
 
 ## src/
 - `src/main.tsx`
@@ -128,8 +148,8 @@
   - Key functions / classes / exports: N/A
   - Critical assumptions or invariants: UNKNOWN (not inspected).
 - `src/App.tsx`
-  - Purpose: Router configuration.
-  - Key functions / classes / exports: default App component.
+  - Purpose: Router configuration and providers.
+  - Key functions / classes / exports: default `App` component.
   - Critical assumptions or invariants: Routes are `/`, `/themes`, `/pm-metrics`, `*`.
 - `src/App.css`
   - Purpose: App-level styling.
@@ -153,19 +173,31 @@
   - Purpose: Mock dataset generator and schema.
   - Key functions / classes / exports: `mockFeedback`, `issueTypeConfig`, `sourceConfig`, types.
   - Critical assumptions or invariants:
-    - Ticket schema includes `createdAt`, `updatedAt`, `priorityScore`, `customerSegment`, `tags`, `jiraUrl`, `mediaUrl`.
+    - Ticket schema includes `createdAt`, `updatedAt`, `priorityScore`, `customerSegment`, `tags`, `jiraKey`, `jiraUrl`, `mediaUrl`.
+    - `timestamp` is derived in UI and should not be persisted for filtering.
 - `src/lib/apiClient.ts`
-  - Purpose: API client types (Entries/Themes/Trends).
+  - Purpose: API client types/helpers for entries/themes/trends.
   - Key functions / classes / exports: Types and/or fetch helpers.
   - Critical assumptions or invariants: UNKNOWN (not inspected).
 - `src/lib/kpiUtils.ts`
-  - Purpose: KPI filters + helper computations (negative %, critical %, top source).
+  - Purpose: KPI filters + helper computations.
   - Key functions / classes / exports: `applyEntryFilters`, `computeCriticalPercentage`, `computeTopSource`, etc.
-  - Critical assumptions or invariants:
-    - Uses `createdAt` or `timestamp` for time filtering.
+  - Critical assumptions or invariants: Uses `createdAt` or `timestamp` for time filtering.
 - `src/lib/utils.ts`
   - Purpose: Utility helpers (className merging).
-  - Key functions / classes / exports: `cn` etc.
+  - Key functions / classes / exports: `cn`.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/hooks/useDashboardKpis.ts`
+  - Purpose: Fetch + compute KPI values for Overview.
+  - Key functions / classes / exports: hook.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/hooks/use-mobile.tsx`
+  - Purpose: Responsive breakpoint hook.
+  - Key functions / classes / exports: hook.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/hooks/use-toast.ts`
+  - Purpose: Toast hook.
+  - Key functions / classes / exports: hook.
   - Critical assumptions or invariants: UNKNOWN (not inspected).
 - `src/utils/feedbackTableFilters.ts`
   - Purpose: View Tickets filter state, URL parsing/serialization, filter predicate.
@@ -177,48 +209,47 @@
   - Purpose: Emerging theme detection logic.
   - Key functions / classes / exports: `computeEmergingThemes` + helpers.
   - Critical assumptions or invariants: UNKNOWN (not inspected).
-- `src/hooks/useDashboardKpis.ts`
-  - Purpose: Fetch + compute KPI values.
-  - Key functions / classes / exports: hook.
-  - Critical assumptions or invariants: UNKNOWN (not inspected).
-- `src/hooks/use-mobile.tsx`, `src/hooks/use-toast.ts`
-  - Purpose: Responsive and toast hooks.
-  - Key functions / classes / exports: hooks.
-  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
 ## src/pages/
 - `src/pages/Index.tsx`
   - Purpose: Overview page (triage).
   - Key functions / classes / exports: default `Index`.
   - Critical assumptions or invariants:
-    - Uses `NeedsAttentionOverlay` for bell overlay content.
+    - Uses `Header` with bell overlay and insights overlay.
     - Loads feedback via `/api/feedback` fallback to `mockFeedback`.
 - `src/pages/PmMetrics.tsx`
-  - Purpose: PM Metrics page (product health signals).
+  - Purpose: Business Metrics page (product health signals).
   - Key functions / classes / exports: default `PmMetrics`.
   - Critical assumptions or invariants:
-    - Uses absolute counts; compare vs previous period when enabled.
-    - Uses `NeedsAttentionOverlay` for bell overlay.
+    - Time range supports 7/30/90 days, All, or custom; compare vs previous period toggle.
+    - Uses absolute counts and client-side aggregations.
 - `src/pages/Themes.tsx`
   - Purpose: Themes detail placeholder.
   - Key functions / classes / exports: default `Themes`.
-  - Critical assumptions or invariants: Uses `Header` and Needs Attention overlay based on mock data.
+  - Critical assumptions or invariants: Uses `Header` and overlays based on mock data.
 - `src/pages/NotFound.tsx`
   - Purpose: 404 page.
   - Key functions / classes / exports: default `NotFound`.
-  - Critical assumptions or invariants: Uses `Header` and Needs Attention overlay based on mock data.
+  - Critical assumptions or invariants: Uses `Header` and overlays based on mock data.
+
+## src/components/
+- `src/components/NavLink.tsx`
+  - Purpose: Navigation link wrapper.
+  - Key functions / classes / exports: `NavLink`.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
 
 ## src/components/dashboard/
 - `Header.tsx`
-  - Purpose: Top bar with brand, nav, refresh, bell overlay anchor.
+  - Purpose: Top bar with brand, nav, refresh, Help Center, Insights button, bell overlay.
   - Key functions / classes / exports: `Header`.
   - Critical assumptions or invariants:
-    - Bell overlay content is passed via `needsAttentionContent`.
+    - Help Center opens `/help.html` in a new tab.
+    - Bell overlay and Insights overlay render different `NeedsAttentionOverlay` variants.
 - `NeedsAttentionOverlay.tsx`
-  - Purpose: Shared overlay content for bell icon.
+  - Purpose: Shared overlay content for bell/insights overlays.
   - Key functions / classes / exports: `NeedsAttentionOverlay`, `buildNeedsAttentionData`.
   - Critical assumptions or invariants:
-    - Uses last 7 days window, high/critical unresolved alerts.
+    - Active Alerts = unresolved high/critical tickets within last 7 days (critical first, oldest first).
 - `KpiCard.tsx`
   - Purpose: Generic KPI card layout with optional tooltip and right-aligned title content.
   - Key functions / classes / exports: `KpiCard`.
@@ -226,40 +257,252 @@
 - `KpiStrip.tsx`
   - Purpose: Overview KPI row and theme distribution card.
   - Key functions / classes / exports: `KpiStrip`.
-  - Critical assumptions or invariants:
-    - `isFiltering` triggers spinner in titles.
+  - Critical assumptions or invariants: `isFiltering` triggers spinner in titles.
 - `TrendsCard.tsx`
   - Purpose: Trends line chart with time slicing and legend toggles.
   - Key functions / classes / exports: `TrendsCard`.
   - Critical assumptions or invariants:
-    - Series: Total Tickets, Priority Tickets (High+Critical), Negative Tickets.
+    - Series: Total Tickets, Priority Tickets (high+critical), Negative Tickets.
 - `FeedbackTable.tsx`
   - Purpose: View Tickets table with filters, sorting, chips, CSV export, detail modal.
   - Key functions / classes / exports: `FeedbackTable`.
   - Critical assumptions or invariants:
-    - Relies on `applyFilters` from `feedbackTableFilters.ts`.
+    - Uses `applyFilters` from `feedbackTableFilters.ts`.
+    - Supports `initialFiltersOverride` and `disableUrlSync` for embedding in modal.
 - `FeedbackDetail.tsx`
   - Purpose: Ticket detail modal.
   - Key functions / classes / exports: `FeedbackDetail`.
-  - Critical assumptions or invariants: Shows ticket details; status is read-only (no resolve action).
+  - Critical assumptions or invariants: Status is read-only; uses `createdAt`/`updatedAt`.
 - `FilterBar.tsx`
-  - Purpose: Global filter bar (Source + Time).
+  - Purpose: Global filter bar (Source + Time) for Overview.
   - Key functions / classes / exports: `FilterBar`.
-  - Critical assumptions or invariants: Uses `activeTime` and `customRange` from parent.
+  - Critical assumptions or invariants: Custom time uses `YearScrollCalendar`.
 - `AIInsights.tsx`
   - Purpose: AI insights card UI.
   - Key functions / classes / exports: `AIInsights`.
   - Critical assumptions or invariants: Can render filtered insights list.
-- `EmergingThemesCard.tsx`, `SentimentChart.tsx`, `CategoryChart.tsx`, `SourceDistribution.tsx`, `IssueTrendModal.tsx`, `MetricCard.tsx`
-  - Purpose: UNKNOWN (not inspected).
+- `IssueTrendModal.tsx`
+  - Purpose: Trend modal used for issue drill-down (Overview).
+  - Key functions / classes / exports: `IssueTrendModal`.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `EmergingThemesCard.tsx`
+  - Purpose: Emerging issues card (Overview/overlay usage).
+  - Key functions / classes / exports: `EmergingThemesCard`.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `SentimentChart.tsx`
+  - Purpose: Sentiment distribution chart.
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `CategoryChart.tsx`
+  - Purpose: Category/issue type chart.
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `SourceDistribution.tsx`
+  - Purpose: Source distribution chart.
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `MetricCard.tsx`
+  - Purpose: Metric card wrapper.
   - Key functions / classes / exports: UNKNOWN (not inspected).
   - Critical assumptions or invariants: UNKNOWN (not inspected).
 
 ## src/components/ui/
-- All files under `src/components/ui/*`
-  - Purpose: shadcn/ui components (Radix wrappers).
-  - Key functions / classes / exports: Component(s) per file.
+- `src/components/ui/accordion.tsx`
+  - Purpose: shadcn/ui accordion wrapper.
+  - Key functions / classes / exports: Accordion components.
   - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/alert-dialog.tsx`
+  - Purpose: shadcn/ui alert dialog wrapper.
+  - Key functions / classes / exports: AlertDialog components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/alert.tsx`
+  - Purpose: shadcn/ui alert wrapper.
+  - Key functions / classes / exports: Alert components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/aspect-ratio.tsx`
+  - Purpose: shadcn/ui aspect ratio wrapper.
+  - Key functions / classes / exports: AspectRatio components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/avatar.tsx`
+  - Purpose: shadcn/ui avatar wrapper.
+  - Key functions / classes / exports: Avatar components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/badge.tsx`
+  - Purpose: shadcn/ui badge wrapper.
+  - Key functions / classes / exports: Badge components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/breadcrumb.tsx`
+  - Purpose: shadcn/ui breadcrumb wrapper.
+  - Key functions / classes / exports: Breadcrumb components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/button.tsx`
+  - Purpose: shadcn/ui button wrapper.
+  - Key functions / classes / exports: Button components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/calendar.tsx`
+  - Purpose: shadcn/ui calendar wrapper.
+  - Key functions / classes / exports: Calendar components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/card.tsx`
+  - Purpose: shadcn/ui card wrapper.
+  - Key functions / classes / exports: Card components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/carousel.tsx`
+  - Purpose: shadcn/ui carousel wrapper.
+  - Key functions / classes / exports: Carousel components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/chart.tsx`
+  - Purpose: Chart helpers/wrappers.
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/checkbox.tsx`
+  - Purpose: shadcn/ui checkbox wrapper.
+  - Key functions / classes / exports: Checkbox components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/command.tsx`
+  - Purpose: shadcn/ui command palette wrapper.
+  - Key functions / classes / exports: Command components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/context-menu.tsx`
+  - Purpose: shadcn/ui context menu wrapper.
+  - Key functions / classes / exports: ContextMenu components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/dialog.tsx`
+  - Purpose: shadcn/ui dialog wrapper.
+  - Key functions / classes / exports: Dialog components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/dropdown-menu.tsx`
+  - Purpose: shadcn/ui dropdown menu wrapper.
+  - Key functions / classes / exports: DropdownMenu components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/drawer.tsx`
+  - Purpose: shadcn/ui drawer wrapper.
+  - Key functions / classes / exports: Drawer components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/form.tsx`
+  - Purpose: shadcn/ui form wrapper.
+  - Key functions / classes / exports: Form components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/hover-card.tsx`
+  - Purpose: shadcn/ui hover card wrapper.
+  - Key functions / classes / exports: HoverCard components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/input-otp.tsx`
+  - Purpose: shadcn/ui OTP input wrapper.
+  - Key functions / classes / exports: InputOtp components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/input.tsx`
+  - Purpose: shadcn/ui input wrapper.
+  - Key functions / classes / exports: Input components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/label.tsx`
+  - Purpose: shadcn/ui label wrapper.
+  - Key functions / classes / exports: Label components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/menubar.tsx`
+  - Purpose: shadcn/ui menubar wrapper.
+  - Key functions / classes / exports: Menubar components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/navigation-menu.tsx`
+  - Purpose: shadcn/ui navigation menu wrapper.
+  - Key functions / classes / exports: NavigationMenu components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/pagination.tsx`
+  - Purpose: shadcn/ui pagination wrapper.
+  - Key functions / classes / exports: Pagination components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/popover.tsx`
+  - Purpose: shadcn/ui popover wrapper.
+  - Key functions / classes / exports: Popover components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/progress.tsx`
+  - Purpose: shadcn/ui progress wrapper.
+  - Key functions / classes / exports: Progress components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/radio-group.tsx`
+  - Purpose: shadcn/ui radio group wrapper.
+  - Key functions / classes / exports: RadioGroup components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/resizable.tsx`
+  - Purpose: shadcn/ui resizable wrapper.
+  - Key functions / classes / exports: Resizable components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/scroll-area.tsx`
+  - Purpose: shadcn/ui scroll area wrapper.
+  - Key functions / classes / exports: ScrollArea components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/select.tsx`
+  - Purpose: shadcn/ui select wrapper.
+  - Key functions / classes / exports: Select components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/separator.tsx`
+  - Purpose: shadcn/ui separator wrapper.
+  - Key functions / classes / exports: Separator components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/sheet.tsx`
+  - Purpose: shadcn/ui sheet wrapper.
+  - Key functions / classes / exports: Sheet components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/sidebar.tsx`
+  - Purpose: shadcn/ui sidebar wrapper.
+  - Key functions / classes / exports: Sidebar components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/skeleton.tsx`
+  - Purpose: shadcn/ui skeleton wrapper.
+  - Key functions / classes / exports: Skeleton components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/slider.tsx`
+  - Purpose: shadcn/ui slider wrapper.
+  - Key functions / classes / exports: Slider components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/sonner.tsx`
+  - Purpose: shadcn/ui sonner wrapper.
+  - Key functions / classes / exports: Sonner components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/switch.tsx`
+  - Purpose: shadcn/ui switch wrapper.
+  - Key functions / classes / exports: Switch components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/table.tsx`
+  - Purpose: shadcn/ui table wrapper.
+  - Key functions / classes / exports: Table components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/tabs.tsx`
+  - Purpose: shadcn/ui tabs wrapper.
+  - Key functions / classes / exports: Tabs components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/textarea.tsx`
+  - Purpose: shadcn/ui textarea wrapper.
+  - Key functions / classes / exports: Textarea components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/toast.tsx`
+  - Purpose: shadcn/ui toast wrapper.
+  - Key functions / classes / exports: Toast components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/toaster.tsx`
+  - Purpose: shadcn/ui toaster wrapper.
+  - Key functions / classes / exports: Toaster component.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/toggle-group.tsx`
+  - Purpose: shadcn/ui toggle group wrapper.
+  - Key functions / classes / exports: ToggleGroup components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/toggle.tsx`
+  - Purpose: shadcn/ui toggle wrapper.
+  - Key functions / classes / exports: Toggle components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/tooltip.tsx`
+  - Purpose: shadcn/ui tooltip wrapper.
+  - Key functions / classes / exports: Tooltip components.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/use-toast.ts`
+  - Purpose: Toast hooks.
+  - Key functions / classes / exports: toast helpers.
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/components/ui/year-scroll-calendar.tsx`
+  - Purpose: Custom date picker with year scroller.
+  - Key functions / classes / exports: `YearScrollCalendar`.
+  - Critical assumptions or invariants: Used in Overview and table custom time pickers.
 
 ## functions/api/
 - `functions/api/feedback.ts`
@@ -280,22 +523,25 @@
   - Purpose: Tests for filter parsing/predicate.
   - Key functions / classes / exports: N/A
   - Critical assumptions or invariants: Uses `applyFilters` and `parseFiltersFromSearch`.
-- `src/test/example.test.ts`, `src/test/setup.ts`
+- `src/test/example.test.ts`
   - Purpose: UNKNOWN (not inspected).
+  - Key functions / classes / exports: UNKNOWN (not inspected).
+  - Critical assumptions or invariants: UNKNOWN (not inspected).
+- `src/test/setup.ts`
+  - Purpose: Test setup.
   - Key functions / classes / exports: UNKNOWN (not inspected).
   - Critical assumptions or invariants: UNKNOWN (not inspected).
 
 # Implementation Details
 - Core business logic:
   - `applyFilters` (View Tickets) applies AND across filter categories and OR within a category; time filtering uses `createdAt`/`timestamp`.
-  - Priority bands: P0 >= 80, P1 60–79, P2 40–59, P3 < 40.
+  - Priority bands: P0 >= 80, P1 60-79, P2 40-59, P3 < 40.
   - Needs Attention overlay:
-    - Active Alerts = unresolved high/critical tickets within last 7 days (sorted critical before high, then oldest first).
+    - Active Alerts = unresolved high/critical tickets within last 7 days (critical before high, oldest first).
     - Emerging Issues computed via `computeEmergingThemes`.
-  - PM Metrics:
-    - Time range supports 7/30/90 days or custom; compare against previous window.
-    - KPI deltas are absolute differences; median uses `median` helper.
-    - “Priority Tickets” in Trends = High + Critical urgency count.
+  - Business Metrics:
+    - Time range supports 7/30/90 days, All, or custom; compare against previous window when enabled.
+    - KPI deltas computed against previous period.
 - State management approach:
   - Local component state via `useState`, derived values via `useMemo`.
   - URL query params handled in `feedbackTableFilters.ts`.
@@ -307,44 +553,45 @@
   - Empty datasets show placeholders (`—`) or empty states.
 - Performance considerations already implemented:
   - Heavy computations memoized via `useMemo`.
-  - Filters use precomputed search text in `Index`.
+  - Charts use memoized datasets.
 
 # Key Decisions & Constraints
 - SPA only, no SSR.
 - Mock data is the primary dataset; backend endpoints serve the same mock data.
 - UI design must follow existing dark, glassy cards and shadcn components.
-- Overview focuses on triage; PM Metrics focuses on longitudinal trends.
+- Overview focuses on triage; Business Metrics focuses on longitudinal trends.
 - Filters and sorting should be stable and predictable.
 
 # Current Project State
 - Fully working features:
   - Overview dashboard with KPI cards, Trends chart, Needs Attention overlay.
-  - PM Metrics dashboard with multiple sections and charts.
+  - Business Metrics dashboard with multiple sections and charts.
   - View Tickets table with filters, sorting, CSV export, detail modal.
   - Cloudflare Worker/Pages endpoints `/api/feedback`, `/api/metrics`, `/api/insights`.
+  - Help Center document at `public/help.html`.
 - Partially implemented features:
-  - Reopen rate metric on PM Metrics shows “Coming soon”.
+  - Reopen rate metric shows placeholder/coming soon (Business Metrics).
 - Broken or unimplemented features:
   - UNKNOWN (not verified in this session).
 
 # Open Tasks (Priority Order)
-- Validate PM Metrics deep-link filters and update any mismatches in query params:
-  - Intended behavior: clicking “View” in PM Metrics lists applies filters via query params.
-  - Relevant files: `src/pages/PmMetrics.tsx`, `src/utils/feedbackTableFilters.ts`.
+- Validate Business Metrics deep-link filters and update any mismatches in query params:
+  - Intended behavior: clicking “View Tickets” in Business Metrics lists applies filters via query params or modal filters.
+  - Relevant files: `src/pages/PmMetrics.tsx`, `src/utils/feedbackTableFilters.ts`, `src/components/dashboard/FeedbackTable.tsx`.
   - Known pitfalls or context: Query param parsing lowercases and normalizes values.
-- Confirm performance/lag improvements:
+- Confirm performance/lag status:
   - Intended behavior: interactions remain responsive with ~6000 mock entries.
-  - Relevant files: `src/pages/Index.tsx`, `src/components/dashboard/TrendsCard.tsx`.
+  - Relevant files: `src/pages/Index.tsx`, `src/components/dashboard/TrendsCard.tsx`, `src/pages/PmMetrics.tsx`.
   - Known pitfalls or context: chart interactions can be expensive if not memoized.
 - Validate overlay behavior:
-  - Intended behavior: bell overlay closes only on outside click; consistent across pages.
+  - Intended behavior: bell overlay closes only on outside click; insights overlay behaves similarly.
   - Relevant files: `src/components/dashboard/Header.tsx`, `src/components/dashboard/NeedsAttentionOverlay.tsx`.
-  - Known pitfalls or context: overlay should ignore clicks on bell and inside overlay.
+  - Known pitfalls or context: overlay should ignore clicks on trigger and inside overlay.
 
 # Known Issues & Risks
 - User-reported performance lag previously; current status UNKNOWN.
 - Many components are uninspected; behavior assumptions may be incomplete.
-- The PM Metrics page uses mock data only; real backend integrations are not present.
+- The Business Metrics page uses mock data only; real backend integrations are not present.
 
 # Rules for Future Development
 - Coding standards to follow:
@@ -355,9 +602,9 @@
   - Do not introduce new design patterns that conflict with existing dark/glass UI.
 - Things future Codex sessions must ALWAYS do:
   - Update URL query serialization when adding new table filters.
-  - Keep Overview and PM Metrics topbar behavior consistent.
+  - Keep Overview and Business Metrics topbar behavior consistent.
 
 # Continuation Instructions
-- Exact next task to work on: Validate PM Metrics deep-link filters and update any mismatches in query params.
+- Exact next task to work on: Validate Business Metrics deep-link filters and update any mismatches in query params or modal filter overrides.
 - Preconditions before starting: App builds and loads without runtime errors.
-- Expected outcome of the next task: Clicking “View” in PM Metrics lists navigates to Overview with filters applied and table reflecting those filters.
+- Expected outcome of the next task: “View Tickets” actions in Business Metrics open the table (modal) with correct filters applied.
