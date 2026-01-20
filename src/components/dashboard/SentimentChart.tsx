@@ -18,7 +18,7 @@ export function SentimentChart({ feedback }: SentimentChartProps) {
   ];
 
   return (
-    <div className="glass rounded-xl p-6 shadow-card animate-slide-up stagger-4">
+    <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-4">
       <h3 className="text-lg font-semibold mb-4">Sentiment Distribution</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">

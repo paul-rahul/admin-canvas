@@ -23,7 +23,7 @@ export function SourceDistribution({ feedback }: SourceDistributionProps) {
     .sort((a, b) => b.count - a.count);
 
   return (
-    <div className="glass rounded-xl p-6 shadow-card animate-slide-up stagger-4">
+    <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-4">
       <h3 className="text-lg font-semibold mb-4">Feedback Sources</h3>
       <div className="space-y-4">
         {sources.map((item) => (

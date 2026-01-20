@@ -264,33 +264,24 @@ const pickUpdatedAtMs = (
   nowMs: number,
   dayMs: number
 ) => {
-  // Ensure updatedAt is always >= createdAt and <= now
   let updatedAt = createdAtMs;
   if (status === 'unresolved' || status === 'in_progress') {
-    // For open tickets, updatedAt is recent (within last 7 days) or could be older
     const recentWindow = 7 * dayMs;
     updatedAt = Math.max(createdAtMs, nowMs - rng() * recentWindow);
     if (rng() < 0.15) {
-      // 15% chance of being older (up to 30 days ago)
       updatedAt = Math.max(createdAtMs, nowMs - rng() * 30 * dayMs);
     }
   } else {
-    // For closed tickets, updatedAt is after creation but before now
-    const timeSinceCreation = nowMs - createdAtMs;
-    if (timeSinceCreation > 0) {
-      const baseWindow = status === 'resolved' ? 14 * dayMs : 21 * dayMs;
-      updatedAt = createdAtMs + rng() * Math.min(baseWindow, timeSinceCreation);
-      if (rng() < 0.2 && timeSinceCreation > 120 * dayMs) {
-        // 20% chance of being much later (up to 120 days after creation)
-        updatedAt = createdAtMs + rng() * Math.min(120 * dayMs, timeSinceCreation);
-      }
-    } else {
-      // If createdAt is in the future (shouldn't happen), set updatedAt = createdAt
-      updatedAt = createdAtMs;
+    const baseWindow = status === 'resolved' ? 14 * dayMs : 21 * dayMs;
+    updatedAt = createdAtMs + rng() * baseWindow;
+    if (rng() < 0.2) {
+      updatedAt = createdAtMs + rng() * 120 * dayMs;
+    }
+    if (updatedAt > nowMs) {
+      updatedAt = nowMs - rng() * 2 * dayMs;
     }
   }
-  // Final safety check: ensure updatedAt is between createdAt and now
-  return Math.max(createdAtMs, Math.min(nowMs, updatedAt));
+  return Math.max(createdAtMs, updatedAt);
 };
 
 const randomId = (rng: () => number, min: number, max: number) =>
@@ -345,13 +336,7 @@ const buildResolution = (
   dayMs: number
 ): Resolution | undefined => {
   if (status !== 'resolved' && status !== 'ignored') return undefined;
-  
-  // Ensure resolvedAt is always >= createdAt and <= updatedAt
-  const timeWindow = Math.max(dayMs, updatedAtMs - createdAtMs);
-  const resolvedAtMs = createdAtMs + rng() * timeWindow;
-  // Ensure resolvedAt doesn't exceed updatedAt
-  const finalResolvedAt = Math.max(createdAtMs, Math.min(updatedAtMs, resolvedAtMs));
-  
+  const resolvedAtMs = createdAtMs + rng() * Math.max(dayMs, updatedAtMs - createdAtMs);
   const resolutionCode =
     status === 'resolved'
       ? weightedPick(rng, [
@@ -367,7 +352,7 @@ const buildResolution = (
           { value: 'cannot_reproduce', weight: 0.2 },
         ]);
   return {
-    resolvedAt: new Date(finalResolvedAt).toISOString(),
+    resolvedAt: new Date(Math.min(updatedAtMs, resolvedAtMs)).toISOString(),
     resolvedBy: RESOLUTION_OWNERS[Math.floor(rng() * RESOLUTION_OWNERS.length)],
     resolutionCode,
     notes: RESOLUTION_NOTES[Math.floor(rng() * RESOLUTION_NOTES.length)],
@@ -444,13 +429,11 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
   };
 };
 
-export const buildMockFeedback = (): TicketRecord[] => {
+const buildMockFeedback = (): TicketRecord[] => {
   const items: TicketRecord[] = [];
   const now = Date.now();
   const totalEntries = 6000;
   const dayMs = 24 * 60 * 60 * 1000;
-  // Data spans from 2012 to 2026 (14 years) with weighted distribution (more recent = more data)
-  const earliestDate = new Date('2012-01-01T00:00:00Z').getTime();
   let seed = 42;
 
   const nextRandom = () => {
@@ -578,57 +561,12 @@ export const buildMockFeedback = (): TicketRecord[] => {
 
   const tagAssignments = assignTags();
 
-  // Distribute data across 2012-2026 (14 years) with guaranteed entries in recent periods
-  const fourteenYearsMs = 14 * 365 * dayMs;
-  
-  // Guarantee minimum entries in recent time periods
-  const last24hCount = 80; // Guaranteed entries in last 24 hours
-  const last7dCount = 250; // Guaranteed entries in last 7 days (including last 24h)
-  const last30dCount = 600; // Guaranteed entries in last 30 days (including last 7d)
-  const lastYearCount = 2400; // Guaranteed entries in last year (including last 30d)
-  
   const bucketCounts = [
     {
-      key: 'last24h',
-      start: now - 24 * 60 * 60 * 1000, // Last 24 hours
-      end: now,
-      count: last24hCount,
-    },
-    {
-      key: 'last7d_excluding24h',
-      start: now - 7 * dayMs,
-      end: now - 24 * 60 * 60 * 1000, // Last 7 days excluding last 24h
-      count: last7dCount - last24hCount,
-    },
-    {
-      key: 'last30d_excluding7d',
-      start: now - 30 * dayMs,
-      end: now - 7 * dayMs, // Last 30 days excluding last 7d
-      count: last30dCount - last7dCount,
-    },
-    {
-      key: 'lastYear_excluding30d',
+      key: 'fullYear',
       start: now - 365 * dayMs,
-      end: now - 30 * dayMs, // Last year excluding last 30d
-      count: lastYearCount - last30dCount,
-    },
-    {
-      key: 'year2to3',
-      start: now - 3 * 365 * dayMs,
-      end: now - 365 * dayMs,
-      count: Math.floor(totalEntries * 0.2), // 20% in years 2-3
-    },
-    {
-      key: 'year4to6',
-      start: now - 6 * 365 * dayMs,
-      end: now - 3 * 365 * dayMs,
-      count: Math.floor(totalEntries * 0.15), // 15% in years 4-6
-    },
-    {
-      key: 'year7to14',
-      start: earliestDate,
-      end: now - 6 * 365 * dayMs,
-      count: totalEntries - lastYearCount - Math.floor(totalEntries * 0.2) - Math.floor(totalEntries * 0.15), // Remaining in years 7-14 (2012-2018)
+      end: now,
+      count: totalEntries,
     },
   ];
 
@@ -674,36 +612,29 @@ export const buildMockFeedback = (): TicketRecord[] => {
     return roll < 0.3 ? 'negative' : roll < 0.65 ? 'neutral' : 'positive';
   };
 
-  const pickOwner = (issueType: IssueType, index: number) => {
-    // Ensure all owners are well represented: guarantee each appears at least 5% of the time
-    const ownerCycle = index % 20;
-    if (ownerCycle === 0) return 'unassigned'; // Guarantee ~5% unassigned
-    if (ownerCycle === 19) return 'design'; // Guarantee ~5% design
-    
+  const pickOwner = (issueType: IssueType) => {
+    if (nextRandom() < 0.08) return 'unassigned';
     const roll = nextRandom();
-    // Issue-type based assignment with probability distribution
     if (issueType === 'performance' || issueType === 'bug' || issueType === 'reliability') {
-      return roll < 0.7 ? 'engineering' : roll < 0.9 ? 'product' : 'support';
+      return roll < 0.75 ? 'engineering' : roll < 0.9 ? 'product' : 'support';
     }
     if (issueType === 'ux' || issueType === 'feature') {
-      return roll < 0.55 ? 'product' : roll < 0.8 ? 'design' : 'engineering';
+      return roll < 0.6 ? 'product' : roll < 0.85 ? 'design' : 'engineering';
     }
     if (issueType === 'account_access' || issueType === 'billing') {
-      return roll < 0.65 ? 'support' : roll < 0.9 ? 'product' : 'engineering';
+      return roll < 0.7 ? 'support' : roll < 0.9 ? 'product' : 'engineering';
     }
     if (issueType === 'documentation') {
-      return roll < 0.5 ? 'product' : roll < 0.8 ? 'support' : 'engineering';
+      return roll < 0.55 ? 'product' : roll < 0.85 ? 'support' : 'engineering';
     }
-    // Default distribution ensuring all owners appear
-    return roll < 0.4 ? 'engineering' : roll < 0.75 ? 'product' : 'support';
+    return roll < 0.45 ? 'engineering' : roll < 0.85 ? 'product' : 'support';
   };
 
-  const pickStatus = (ageDays: number, urgency: Urgency, index: number) => {
+  const pickStatus = (ageDays: number, urgency: Urgency) => {
     let unresolved = 0.4;
     let inProgress = 0.3;
     let resolved = 0.25;
     let ignored = 0.05;
-    
     if (ageDays > 60) {
       unresolved = 0.2;
       inProgress = 0.1;
@@ -720,20 +651,10 @@ export const buildMockFeedback = (): TicketRecord[] => {
       resolved = 0.35;
       ignored = 0.05;
     }
-    
     if (urgency === 'critical') {
       unresolved += 0.15;
       resolved -= 0.1;
     }
-    
-    // Ensure minimum representation: use index to guarantee all statuses appear
-    // Every 20th ticket cycles through all statuses to ensure variability
-    const statusCycle = index % 20;
-    if (statusCycle === 19) return 'ignored'; // Guarantee at least 5% ignored
-    if (statusCycle === 18) return 'resolved'; // Guarantee resolved appears
-    if (statusCycle === 17) return 'in_progress'; // Guarantee in_progress appears
-    
-    // For other tickets, use probability-based distribution
     const total = unresolved + inProgress + resolved + ignored;
     const roll = nextRandom() * total;
     if (roll < unresolved) return 'unresolved';
@@ -771,8 +692,8 @@ export const buildMockFeedback = (): TicketRecord[] => {
     const content = `${description} Please prioritize.`;
     const timestamp = new Date(timestampMs);
     const ageDays = Math.max(0, (now - timestampMs) / dayMs);
-    const status = pickStatus(ageDays, urgency, i);
-    const owner = pickOwner(issueType, i);
+    const status = pickStatus(ageDays, urgency);
+    const owner = pickOwner(issueType);
     const oldTicket: OldTicket = {
       id: `${source}-${issueType}-${i}`,
       source,
@@ -861,7 +782,7 @@ const validateMockFeedback = (items: TicketRecord[]) => {
   }
 };
 
-export const buildFeedbackWithDates = (items: TicketRecord[]): FeedbackItem[] =>
+const buildFeedbackWithDates = (items: TicketRecord[]): FeedbackItem[] =>
   items.map((item) => ({
     ...item,
     timestamp: new Date(item.createdAt),

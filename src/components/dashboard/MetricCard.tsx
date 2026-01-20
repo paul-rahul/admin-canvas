@@ -18,7 +18,7 @@ export function MetricCard({ title, value, subtitle, icon: Icon, trend, classNam
   return (
     <div
       className={cn(
-        "glass rounded-xl p-6 shadow-card animate-slide-up",
+        "glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up",
         className
       )}
       style={{ animationDelay: `${delay * 0.1}s` }}

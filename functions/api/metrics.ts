@@ -1,12 +1,9 @@
-import { mockFeedback, FeedbackItem } from '../../src/data/mockFeedback';
-
-type FeedbackApiItem = Omit<FeedbackItem, 'timestamp'> & { timestamp: string };
-
-const serializeFeedback = (items: FeedbackItem[]): FeedbackApiItem[] =>
-  items.map((item) => ({
-    ...item,
-    timestamp: item.timestamp.toISOString(),
-  }));
+type FeedbackApiItem = {
+  id: string;
+  timestamp: string;
+  urgency?: string;
+  resolved?: boolean;
+};
 
 const computeMetrics = (items: FeedbackApiItem[]) => {
   const total = items.length;
@@ -36,71 +33,22 @@ const upsertMetrics = async (db: D1Database, metrics: ReturnType<typeof computeM
 };
 
 export const onRequest: PagesFunction = async ({ env }) => {
-  try {
-    const db = (env as unknown as { ANALYTICS_DB?: D1Database }).ANALYTICS_DB;
+  const db = env.ANALYTICS_DB as D1Database;
 
-    let items: FeedbackApiItem[];
+  const { results } = await db
+    .prepare('SELECT payload FROM feedback_entries')
+    .all<{ payload: string }>();
 
-    if (db) {
-      const { results } = await db
-        .prepare('SELECT payload FROM feedback_entries')
-        .all<{ payload: string }>();
+  const items: FeedbackApiItem[] =
+    results?.map((row) => JSON.parse(row.payload)) ?? [];
 
-      const itemsFromDb: FeedbackApiItem[] =
-        results?.map((row) => JSON.parse(row.payload)) ?? [];
+  const metrics = computeMetrics(items);
+  await upsertMetrics(db, metrics);
 
-      // Use same aggressive check as feedback endpoint
-      const now = Date.now();
-      const earliestValidDate = new Date('2012-01-01T00:00:00Z').getTime();
-      const oneDayAgo = now - 24 * 60 * 60 * 1000;
-      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-      
-      const hasOldEntries = itemsFromDb.some((item) => {
-        const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
-        return timestamp > 0 && timestamp < earliestValidDate;
-      });
-      
-      const last24hCount = itemsFromDb.filter((item) => {
-        const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
-        return timestamp >= oneDayAgo && timestamp <= now;
-      }).length;
-      
-      const last7dCount = itemsFromDb.filter((item) => {
-        const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
-        return timestamp >= sevenDaysAgo && timestamp <= now;
-      }).length;
-      
-      const hasRecentData = !hasOldEntries && 
-        itemsFromDb.length > 0 && 
-        last7dCount >= 50 && 
-        last24hCount >= 10;
-
-      items = hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);
-    } else {
-      items = serializeFeedback(mockFeedback);
-    }
-
-    const metrics = computeMetrics(items);
-
-    if (db) {
-      await upsertMetrics(db, metrics);
-    }
-
-    return new Response(JSON.stringify(metrics), {
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    });
-  } catch {
-    const fallbackMetrics = computeMetrics(serializeFeedback(mockFeedback));
-
-    return new Response(JSON.stringify(fallbackMetrics), {
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    });
-  }
+  return new Response(JSON.stringify(metrics), {
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  });
 };
-

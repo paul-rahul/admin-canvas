@@ -11,7 +11,6 @@
     "preview": "vite preview",
     "migrate:d1": "npx wrangler d1 migrations apply cerebro-db-data --remote",
     "seed:d1": "npx wrangler d1 execute cerebro-db-data --remote --file=./scripts/seed-d1.sql",
-    "analyze:dates": "npx tsx scripts/analyze-date-distribution.ts",
     "deploy:pages": "npm run build && npx wrangler pages deploy ./dist --project-name admin-canvas",
     "test": "vitest run",
     "test:watch": "vitest"
