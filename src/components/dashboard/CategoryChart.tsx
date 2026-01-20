@@ -73,7 +73,7 @@ export function CategoryChart({ feedback, embedded = false, showTooltip = true }
   }
 
   return (
-    <div className="glass rounded-xl p-6 shadow-card opacity-0 animate-slide-up stagger-5">
+    <div className="glass rounded-xl p-6 shadow-card animate-slide-up stagger-5">
       <h3 className="text-lg font-semibold mb-4">Feedback by Issue Type</h3>
       {chart}
     </div>

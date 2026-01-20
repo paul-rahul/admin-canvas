@@ -1362,7 +1362,7 @@ function FeedbackTableComponent({
   return (
     <div
       className={cn(
-        "glass rounded-xl overflow-hidden shadow-card opacity-0 animate-slide-up stagger-3",
+        "glass rounded-xl overflow-hidden shadow-card animate-slide-up stagger-3",
         containerClassName
       )}
     >

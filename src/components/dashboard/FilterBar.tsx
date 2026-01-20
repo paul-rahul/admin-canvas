@@ -67,7 +67,7 @@ function FilterBarComponent({
   };
 
   return (
-    <div className="glass rounded-xl p-4 shadow-card opacity-0 animate-slide-up stagger-1">
+    <div className="glass rounded-xl p-4 shadow-card animate-slide-up stagger-1">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground font-medium">Source:</span>
