@@ -490,7 +490,10 @@ export default function PmMetrics() {
   const loadFeedback = useCallback(async () => {
     try {
       const response = await fetch('/api/feedback');
-      if (!response.ok) throw new Error('Failed to load feedback');
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!response.ok || !contentType.includes('application/json')) {
+        throw new Error('Failed to load feedback');
+      }
       const payload = (await response.json()) as Array<
         Omit<FeedbackItem, 'timestamp'> & { timestamp: string }
       >;
