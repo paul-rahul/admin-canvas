@@ -19,7 +19,7 @@ const Index = () => {
   const deferredSearch = useDeferredValue(searchQuery);
   const searchNeedle = useMemo(() => deferredSearch.trim().toLowerCase(), [deferredSearch]);
   const [activeSource, setActiveSource] = useState<FeedbackSource | 'all'>('all');
-  const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('all');
+  const [activeTime, setActiveTime] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
   const [selectedItem, setSelectedItem] = useState<FeedbackItem | null>(null);
   const [customRange, setCustomRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
