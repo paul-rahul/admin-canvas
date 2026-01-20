@@ -1,14 +1,18 @@
-import { mockFeedback } from '../../src/data/mockFeedback';
+import { buildMockFeedback, buildFeedbackWithDates, FeedbackItem } from '../../src/data/mockFeedback';
 
-type FeedbackApiItem = Omit<(typeof mockFeedback)[number], 'timestamp'> & {
+type FeedbackApiItem = Omit<FeedbackItem, 'timestamp'> & {
   timestamp: string;
 };
 
-const serializeFeedback = (): FeedbackApiItem[] =>
-  mockFeedback.map((item) => ({
+const serializeFeedback = (): FeedbackApiItem[] => {
+  // Generate fresh data at runtime to ensure we always use the latest generation logic
+  const rawItems = buildMockFeedback();
+  const itemsWithDates = buildFeedbackWithDates(rawItems);
+  return itemsWithDates.map((item) => ({
     ...item,
     timestamp: item.timestamp.toISOString(),
   }));
+};
 
 export const onRequest: PagesFunction = async ({ env }) => {
   try {

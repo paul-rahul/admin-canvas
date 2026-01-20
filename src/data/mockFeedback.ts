@@ -444,7 +444,7 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
   };
 };
 
-const buildMockFeedback = (): TicketRecord[] => {
+export const buildMockFeedback = (): TicketRecord[] => {
   const items: TicketRecord[] = [];
   const now = Date.now();
   const totalEntries = 6000;
@@ -861,7 +861,7 @@ const validateMockFeedback = (items: TicketRecord[]) => {
   }
 };
 
-const buildFeedbackWithDates = (items: TicketRecord[]): FeedbackItem[] =>
+export const buildFeedbackWithDates = (items: TicketRecord[]): FeedbackItem[] =>
   items.map((item) => ({
     ...item,
     timestamp: new Date(item.createdAt),
