@@ -402,8 +402,8 @@ const Index = () => {
                         </TooltipTrigger>
                         <TooltipContent side="top" className="z-[60] max-w-none whitespace-nowrap">
                           <div className="space-y-1 text-xs">
-                            <p>• % critical = critical / total tickets in current window</p>
-                            <p>• Trend % = (current critical - previous critical) / previous critical</p>
+                            <p>• % critical = critical <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">/</code> total tickets in current window</p>
+                            <p>• Trend % = (current critical - previous critical) <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">/</code> previous critical</p>
                             <p>• Counts unresolved Critical and High urgency tickets</p>
                           </div>
                         </TooltipContent>

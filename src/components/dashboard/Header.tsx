@@ -1,4 +1,4 @@
-import { Bell, RefreshCw, Brain, X } from 'lucide-react';
+import { Bell, RefreshCw, Brain, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
@@ -117,20 +117,20 @@ export function Header({
         <div className="flex items-center gap-4">
           <Button
             asChild
-            variant="outline"
+            variant="default"
             size="sm"
-            className="border-border/90 shadow-[0_0_0_1px_hsl(var(--border)/0.6)]"
+            className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-[0_0_0_1px_hsl(217_91%_60%/0.6)]"
           >
-            <a href="/help.html" target="_blank" rel="noreferrer">
-              Help Center
+            <a href="/user-guide" target="_blank" rel="noreferrer">
+              User Guide
             </a>
           </Button>
           <div className="relative">
             <Button
               ref={insightsButtonRef}
-              variant="outline"
+              variant="default"
               size="sm"
-              className="border-border/90 shadow-[0_0_0_1px_hsl(var(--border)/0.6)]"
+              className="relative bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:from-primary/90 hover:to-primary/70 shadow-[0_0_16px_hsl(var(--primary)/0.6)] ring-1 ring-primary/50 font-semibold gap-2 px-4"
               onClick={() => {
                 setIsInsightsOpen((prev) => !prev);
                 setIsOverlayOpen(false);
@@ -138,7 +138,8 @@ export function Header({
               aria-expanded={isInsightsOpen}
               aria-label="Toggle Insights overlay"
             >
-              Insights
+              <Sparkles className="h-4 w-4" />
+              AI Insights
             </Button>
             {isInsightsOpen && insightsContent && (
               <div
