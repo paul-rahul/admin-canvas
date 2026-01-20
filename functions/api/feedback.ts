@@ -33,10 +33,14 @@ export const onRequest: PagesFunction = async ({ env }) => {
     // If data is too old (from 1969) or empty, use fresh mockFeedback
     const now = Date.now();
     const earliestValidDate = new Date('2012-01-01T00:00:00Z').getTime();
-    const hasRecentData = itemsFromDb.length > 0 && itemsFromDb.some((item) => {
+    
+    // Check if we have recent data - at least 50% of entries should be from 2012+
+    const recentCount = itemsFromDb.filter((item) => {
       const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
       return timestamp >= earliestValidDate && timestamp <= now;
-    });
+    }).length;
+    
+    const hasRecentData = itemsFromDb.length > 0 && recentCount > itemsFromDb.length * 0.5;
 
     const items = hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);
 

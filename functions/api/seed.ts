@@ -32,25 +32,40 @@ export const onRequest: PagesFunction = async ({ env }) => {
     let inserted = 0;
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
-      const batchStmt = db.batch(
-        batch.map((item) => stmt.bind(item.id, JSON.stringify(item)))
+      const batchPromises = batch.map((item) => 
+        db.prepare('INSERT OR REPLACE INTO feedback_entries (id, payload) VALUES (?1, ?2)')
+          .bind(item.id, JSON.stringify(item))
+          .run()
       );
-      await batchStmt;
+      await Promise.all(batchPromises);
       inserted += batch.length;
     }
 
     // Verify the data was inserted
-    const { results } = await db
+    const verifyResult = await db
       .prepare('SELECT COUNT(*) as count FROM feedback_entries')
       .first<{ count: number }>();
+
+    const verifiedCount = verifyResult?.count ?? 0;
+
+    // Sample a few entries to verify dates
+    const sampleResult = await db
+      .prepare('SELECT payload FROM feedback_entries LIMIT 5')
+      .all<{ payload: string }>();
+    
+    const sampleDates = sampleResult?.results?.map((row) => {
+      const item = JSON.parse(row.payload);
+      return item.createdAt || item.timestamp;
+    }) || [];
 
     return new Response(
       JSON.stringify({
         ok: true,
         count: inserted,
-        verified: results?.count ?? 0,
+        verified: verifiedCount,
         source: 'mockFeedback',
-        message: `Successfully seeded ${inserted} entries with 14-year date distribution (2012-2026)`,
+        message: `Successfully seeded ${inserted} entries with 14-year date distribution (2012-2026). Verified: ${verifiedCount} entries in database.`,
+        sampleDates,
       }),
       {
         headers: {
