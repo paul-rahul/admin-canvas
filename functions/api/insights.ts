@@ -108,8 +108,20 @@ const buildInsights = async (ai: AiBinding | undefined, items: FeedbackApiItem[]
 };
 
 export const onRequest: PagesFunction = async ({ env }) => {
-  const items = serializeFeedback(mockFeedback);
-  const insights = await buildInsights(env.AI, items);
+  const db = env.ANALYTICS_DB as D1Database;
+
+  const { results } = await db
+    .prepare('SELECT payload FROM feedback_entries')
+    .all<{ payload: string }>();
+
+  const items = (results?.map((row) => JSON.parse(row.payload)) ??
+    []) as FeedbackApiItem[];
+
+  // Fallback to mock data if DB is empty (e.g. before seeding)
+  const sourceItems =
+    items.length > 0 ? items : serializeFeedback(mockFeedback);
+
+  const insights = await buildInsights(env.AI as AiBinding | undefined, sourceItems);
 
   return new Response(JSON.stringify(insights), {
     headers: {

@@ -1,12 +1,9 @@
-import { mockFeedback, FeedbackItem } from '../../src/data/mockFeedback';
-
-type FeedbackApiItem = Omit<FeedbackItem, 'timestamp'> & { timestamp: string };
-
-const serializeFeedback = (items: FeedbackItem[]): FeedbackApiItem[] =>
-  items.map((item) => ({
-    ...item,
-    timestamp: item.timestamp.toISOString(),
-  }));
+type FeedbackApiItem = {
+  id: string;
+  timestamp: string;
+  urgency?: string;
+  resolved?: boolean;
+};
 
 const computeMetrics = (items: FeedbackApiItem[]) => {
   const total = items.length;
@@ -36,9 +33,17 @@ const upsertMetrics = async (db: D1Database, metrics: ReturnType<typeof computeM
 };
 
 export const onRequest: PagesFunction = async ({ env }) => {
-  const items = serializeFeedback(mockFeedback);
+  const db = env.ANALYTICS_DB as D1Database;
+
+  const { results } = await db
+    .prepare('SELECT payload FROM feedback_entries')
+    .all<{ payload: string }>();
+
+  const items: FeedbackApiItem[] =
+    results?.map((row) => JSON.parse(row.payload)) ?? [];
+
   const metrics = computeMetrics(items);
-  await upsertMetrics(env.ANALYTICS_DB, metrics);
+  await upsertMetrics(db, metrics);
 
   return new Response(JSON.stringify(metrics), {
     headers: {
