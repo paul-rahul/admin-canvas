@@ -29,8 +29,16 @@ export const onRequest: PagesFunction = async ({ env }) => {
     const itemsFromDb: FeedbackApiItem[] =
       results?.map((row) => JSON.parse(row.payload)) ?? [];
 
-    const items =
-      itemsFromDb.length > 0 ? itemsFromDb : serializeFeedback(mockFeedback);
+    // Check if data exists and is recent (within last 10 years)
+    // If data is too old (from 1969) or empty, use fresh mockFeedback
+    const now = Date.now();
+    const tenYearsAgo = now - 10 * 365 * 24 * 60 * 60 * 1000;
+    const hasRecentData = itemsFromDb.length > 0 && itemsFromDb.some((item) => {
+      const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      return timestamp >= tenYearsAgo;
+    });
+
+    const items = hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);
 
     return new Response(JSON.stringify(items), {
       headers: {

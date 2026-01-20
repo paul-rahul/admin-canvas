@@ -17,23 +17,40 @@ export const onRequest: PagesFunction = async ({ env }) => {
       throw new Error('ANALYTICS_DB binding is missing');
     }
 
+    // Clear old data first to ensure fresh seed
+    await db.prepare('DELETE FROM feedback_entries').run();
+
     const items = serializeFeedback();
 
+    // Use batch inserts for better performance
     const stmt = db.prepare(
-      'INSERT OR REPLACE INTO feedback_entries (id, payload) VALUES (?1, ?2)'
+      'INSERT INTO feedback_entries (id, payload) VALUES (?1, ?2)'
     );
 
-    const batch = db.batch(
-      items.map((item) => stmt.bind(item.id, JSON.stringify(item)))
-    );
+    // Process in batches of 100 to avoid hitting D1 limits
+    const batchSize = 100;
+    let inserted = 0;
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchStmt = db.batch(
+        batch.map((item) => stmt.bind(item.id, JSON.stringify(item)))
+      );
+      await batchStmt;
+      inserted += batch.length;
+    }
 
-    await batch;
+    // Verify the data was inserted
+    const { results } = await db
+      .prepare('SELECT COUNT(*) as count FROM feedback_entries')
+      .first<{ count: number }>();
 
     return new Response(
       JSON.stringify({
         ok: true,
-        count: items.length,
+        count: inserted,
+        verified: results?.count ?? 0,
         source: 'mockFeedback',
+        message: `Successfully seeded ${inserted} entries with 10-year date distribution`,
       }),
       {
         headers: {
