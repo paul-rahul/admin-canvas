@@ -578,32 +578,57 @@ const buildMockFeedback = (): TicketRecord[] => {
 
   const tagAssignments = assignTags();
 
-  // Distribute data across 2012-2026 (14 years) with weighted distribution (more recent = more data)
+  // Distribute data across 2012-2026 (14 years) with guaranteed entries in recent periods
   const fourteenYearsMs = 14 * 365 * dayMs;
+  
+  // Guarantee minimum entries in recent time periods
+  const last24hCount = 80; // Guaranteed entries in last 24 hours
+  const last7dCount = 250; // Guaranteed entries in last 7 days (including last 24h)
+  const last30dCount = 600; // Guaranteed entries in last 30 days (including last 7d)
+  const lastYearCount = 2400; // Guaranteed entries in last year (including last 30d)
+  
   const bucketCounts = [
     {
-      key: 'lastYear',
-      start: now - 365 * dayMs,
+      key: 'last24h',
+      start: now - 24 * 60 * 60 * 1000, // Last 24 hours
       end: now,
-      count: Math.floor(totalEntries * 0.35), // 35% in last year
+      count: last24hCount,
+    },
+    {
+      key: 'last7d_excluding24h',
+      start: now - 7 * dayMs,
+      end: now - 24 * 60 * 60 * 1000, // Last 7 days excluding last 24h
+      count: last7dCount - last24hCount,
+    },
+    {
+      key: 'last30d_excluding7d',
+      start: now - 30 * dayMs,
+      end: now - 7 * dayMs, // Last 30 days excluding last 7d
+      count: last30dCount - last7dCount,
+    },
+    {
+      key: 'lastYear_excluding30d',
+      start: now - 365 * dayMs,
+      end: now - 30 * dayMs, // Last year excluding last 30d
+      count: lastYearCount - last30dCount,
     },
     {
       key: 'year2to3',
       start: now - 3 * 365 * dayMs,
       end: now - 365 * dayMs,
-      count: Math.floor(totalEntries * 0.25), // 25% in years 2-3
+      count: Math.floor(totalEntries * 0.2), // 20% in years 2-3
     },
     {
       key: 'year4to6',
       start: now - 6 * 365 * dayMs,
       end: now - 3 * 365 * dayMs,
-      count: Math.floor(totalEntries * 0.2), // 20% in years 4-6
+      count: Math.floor(totalEntries * 0.15), // 15% in years 4-6
     },
     {
       key: 'year7to14',
       start: earliestDate,
       end: now - 6 * 365 * dayMs,
-      count: totalEntries - Math.floor(totalEntries * 0.35) - Math.floor(totalEntries * 0.25) - Math.floor(totalEntries * 0.2), // Remaining in years 7-14 (2012-2018)
+      count: totalEntries - lastYearCount - Math.floor(totalEntries * 0.2) - Math.floor(totalEntries * 0.15), // Remaining in years 7-14 (2012-2018)
     },
   ];
 
