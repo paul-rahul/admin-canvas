@@ -33,14 +33,24 @@ export const onRequest: PagesFunction = async ({ env }) => {
     // If data is too old (from 1969) or empty, use fresh mockFeedback
     const now = Date.now();
     const earliestValidDate = new Date('2012-01-01T00:00:00Z').getTime();
+    const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
     
-    // Check if we have recent data - at least 50% of entries should be from 2012+
+    // Check if we have recent data - at least 80% of entries should be from 2012+
+    // AND at least some entries should be from the last year
     const recentCount = itemsFromDb.filter((item) => {
       const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
       return timestamp >= earliestValidDate && timestamp <= now;
     }).length;
     
-    const hasRecentData = itemsFromDb.length > 0 && recentCount > itemsFromDb.length * 0.5;
+    const lastYearCount = itemsFromDb.filter((item) => {
+      const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      return timestamp >= oneYearAgo && timestamp <= now;
+    }).length;
+    
+    // Require: 80% recent AND at least 100 entries from last year (to ensure fresh data)
+    const hasRecentData = itemsFromDb.length > 0 && 
+      recentCount > itemsFromDb.length * 0.8 && 
+      lastYearCount >= 100;
 
     const items = hasRecentData ? itemsFromDb : serializeFeedback(mockFeedback);
 

@@ -53,15 +53,23 @@ export const onRequest: PagesFunction = async ({ env }) => {
 
     const verifiedCount = verifyResult?.count ?? 0;
 
-    // Sample a few entries to verify dates
-    const sampleResult = await db
-      .prepare('SELECT payload FROM feedback_entries LIMIT 5')
+    // Sample entries to verify dates - get min and max dates
+    const allResults = await db
+      .prepare('SELECT payload FROM feedback_entries')
       .all<{ payload: string }>();
     
-    const sampleDates = sampleResult?.results?.map((row) => {
+    const allDates = allResults?.results?.map((row) => {
       const item = JSON.parse(row.payload);
-      return item.createdAt || item.timestamp;
+      return new Date(item.createdAt || item.timestamp).getTime();
     }) || [];
+    
+    const minDate = allDates.length > 0 ? new Date(Math.min(...allDates)).toISOString() : 'N/A';
+    const maxDate = allDates.length > 0 ? new Date(Math.max(...allDates)).toISOString() : 'N/A';
+    
+    // Count entries in last year
+    const now = Date.now();
+    const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+    const lastYearCount = allDates.filter(ts => ts >= oneYearAgo).length;
 
     return new Response(
       JSON.stringify({
@@ -70,7 +78,11 @@ export const onRequest: PagesFunction = async ({ env }) => {
         verified: verifiedCount,
         source: 'mockFeedback',
         message: `Successfully seeded ${inserted} entries with 14-year date distribution (2012-2026). Verified: ${verifiedCount} entries in database.`,
-        sampleDates,
+        dateRange: {
+          earliest: minDate,
+          latest: maxDate,
+          lastYearCount,
+        },
       }),
       {
         headers: {
