@@ -1144,7 +1144,7 @@ export default function PmMetrics() {
           insightsContent={insightsContent}
           alertCount={needsAttentionData.alerts.length}
         />
-        <section className="fixed top-[56px] left-0 right-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur">
+        <section className="fixed top-[48px] left-0 right-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur">
           <div className="container mx-auto px-6 py-3">
             <div className="rounded-xl border border-border/60 bg-background/70 p-4 shadow-card">
               <div className="flex flex-wrap items-center gap-4">
@@ -1331,7 +1331,7 @@ export default function PmMetrics() {
           </div>
         </section>
 
-        <main className="container mx-auto px-6 pt-32 pb-10 space-y-6">
+        <main className="container mx-auto px-6 pt-24 pb-10 space-y-6">
 
           <section className="space-y-3">
             <div>
