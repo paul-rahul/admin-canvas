@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:d1": "npx wrangler d1 execute admin-canvas-analytics --file=./scripts/seed-d1.sql",
+    "deploy:pages": "npm run build && npx wrangler pages deploy ./dist --project-name admin-canvas",
     "test": "vitest run",
     "test:watch": "vitest"
   },
