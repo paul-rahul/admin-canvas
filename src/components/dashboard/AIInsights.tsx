@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Sparkles, TrendingUp, AlertTriangle, Lightbulb, ArrowRight, Info } from 'lucide-react';
 import { FeedbackItem } from '@/data/mockFeedback';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,9 @@ type InsightPayload = {
 
 function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets }: AIInsightsProps) {
   const [serverInsights, setServerInsights] = useState<InsightPayload | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const isLoadingRef = useRef(false);
 
   const { criticalCount, featureRequests } = useMemo(() => {
     let critical = 0;
@@ -99,31 +102,105 @@ function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets 
     primary: 'text-primary',
   };
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadInsights = useCallback(async (retryAttempt = 0) => {
+    setIsLoading(true);
+    try {
+      // Add timestamp to prevent caching
+      const response = await fetch(`/api/insights?t=${Date.now()}`, {
+        cache: 'no-store', // Ensure fresh data
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load AI insights: ${response.status}`);
+      }
+      const payload = (await response.json()) as InsightPayload;
+      console.log('[AI Insights] Received payload:', { 
+        source: payload?.source, 
+        aiAvailable: payload?.aiAvailable,
+        insightsCount: payload?.insights?.length 
+      });
+      
+      // CRITICAL: Don't overwrite AI-generated content with fallback
+      // Only update if:
+      // 1. We have valid insights
+      // 2. Either we don't have existing AI content, OR the new payload is also AI-generated
+      setServerInsights((prev) => {
+        // If we already have AI-generated content, don't replace it with fallback
+        if (prev?.source === 'ai' && payload?.source === 'fallback') {
+          console.log('[AI Insights] Keeping existing AI-generated content, ignoring fallback');
+          return prev;
+        }
+        // Otherwise, update with new payload
+        return payload;
+      });
+      
+      if (payload?.insights?.length) {
+        setRetryCount(0); // Reset retry count on success
+      } else if (payload) {
+        // If we got a response but no insights, still update status (but don't overwrite AI)
+        // Only update if we don't have AI content already
+        setServerInsights((prev) => {
+          if (prev?.source === 'ai') {
+            return prev; // Keep AI content
+          }
+          return payload; // Update with new status
+        });
+      } else {
+        throw new Error('Invalid insights payload');
+      }
+    } catch (error) {
+      console.error('[AI Insights] Failed to load insights:', error);
+      // Retry up to 2 times with exponential backoff
+      if (retryAttempt < 2) {
+        const delay = Math.pow(2, retryAttempt) * 1000; // 1s, 2s
+        setTimeout(() => {
+          loadInsights(retryAttempt + 1);
+        }, delay);
+      } else {
+        // Only set to null if we don't have AI content already
+        setServerInsights((prev) => {
+          if (prev?.source === 'ai') {
+            console.log('[AI Insights] Keeping existing AI-generated content despite error');
+            return prev; // Keep AI content even on error
+          }
+          return null; // Only clear if we don't have AI content
+        });
+        setRetryCount(retryAttempt);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-    const loadInsights = async () => {
-      try {
-        const response = await fetch('/api/insights');
-        if (!response.ok) {
-          throw new Error('Failed to load AI insights');
-        }
-        const payload = (await response.json()) as InsightPayload;
-        if (isMounted && payload?.insights?.length) {
-          setServerInsights(payload);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setServerInsights(null);
-        }
+  useEffect(() => {
+    // Only load on initial mount if we don't have insights yet
+    if (!serverInsights && !isLoadingRef.current) {
+      isLoadingRef.current = true;
+      void loadInsights().finally(() => {
+        isLoadingRef.current = false;
+      });
+    }
+  }, []); // Only run once on mount
+
+  // Refetch when overlay opens (listen to custom event from Header)
+  useEffect(() => {
+    const handleOverlayOpened = () => {
+      // Only refetch if we're not already loading
+      if (!isLoadingRef.current) {
+        isLoadingRef.current = true;
+        void loadInsights(0).finally(() => {
+          isLoadingRef.current = false;
+        });
       }
     };
-
-    void loadInsights();
+    window.addEventListener('insights-overlay-opened', handleOverlayOpened);
     return () => {
-      isMounted = false;
+      window.removeEventListener('insights-overlay-opened', handleOverlayOpened);
     };
-  }, []);
+  }, [loadInsights]);
 
   return (
     <div className="glass rounded-xl p-4 shadow-card self-start">
@@ -134,15 +211,15 @@ function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets 
         <div className="flex items-center gap-2 flex-1">
           <h3 className="text-base font-semibold">AI Insights</h3>
           {serverInsights?.source === 'ai' ? (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success border border-success/30">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success border border-success/30 font-medium">
               AI Generated
             </span>
           ) : serverInsights?.aiAvailable ? (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning border border-warning/30">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning border border-warning/30 font-medium">
               Fallback Mode
             </span>
           ) : (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
               AI Not Available
             </span>
           )}

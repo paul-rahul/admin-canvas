@@ -9,5 +9,13 @@ database_id = "9f56c3bd-29d6-4eda-8348-1f6c5ce79e64"
 migrations_dir = "migrations"
 
 # Workers AI binding (available in Pages Functions via env.AI)
+# IMPORTANT: For Cloudflare Pages, you MUST also configure this in the Dashboard:
+# 1. Go to Cloudflare Dashboard > Workers & Pages > admin-canvas
+# 2. Navigate to Settings > Functions > Bindings
+# 3. Click "Add binding" > Select "Workers AI"
+# 4. Set variable name to "AI" (must match the binding name below)
+# 5. Save and redeploy
+# 
+# The wrangler.toml configuration below is required but may not be sufficient alone.
 [ai]
 binding = "AI"

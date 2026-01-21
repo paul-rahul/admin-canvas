@@ -166,8 +166,18 @@ export function Header({
               size="sm"
               className="relative bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:from-primary/90 hover:to-primary/70 shadow-[0_0_16px_hsl(var(--primary)/0.6)] ring-1 ring-primary/50 font-semibold gap-2 px-4"
               onClick={() => {
+                const wasOpen = isInsightsOpen;
                 setIsInsightsOpen((prev) => !prev);
                 setIsOverlayOpen(false);
+                // Trigger refetch when opening (not closing)
+                if (!wasOpen && insightsContent) {
+                  // Force a re-render to trigger useEffect in AIInsights
+                  // Dispatch event to trigger AIInsights refetch
+                  // Use setTimeout to ensure the overlay is fully rendered first
+                  setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('insights-overlay-opened'));
+                  }, 100);
+                }
               }}
               aria-expanded={isInsightsOpen}
               aria-label="Toggle Insights overlay"

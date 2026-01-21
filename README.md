@@ -1,4 +1,9 @@
 # Project Overview
+
+## Friction Log
+
+See [FRICTION_LOG.md](./FRICTION_LOG.md) for a detailed log of issues encountered during development and deployment, including Workers AI integration challenges.
+
 - Project name: Cerebro
 - One-line goal: A product feedback dashboard with an Overview (triage) page and a Business Metrics page for longitudinal product health signals, backed by mock data and Cloudflare Workers/Pages APIs.
 - Explicit non-goals / out-of-scope items:

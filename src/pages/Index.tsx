@@ -12,8 +12,6 @@ import { formatPercent } from '@/lib/kpiUtils';
 import { AlertTriangle, TrendingDown, TrendingUp, Loader2, Info } from 'lucide-react';
 import { NeedsAttentionOverlay, buildNeedsAttentionData } from '@/components/dashboard/NeedsAttentionOverlay';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { DEFAULT_FILTERS, type TableFilters } from '@/utils/feedbackTableFilters';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -32,8 +30,6 @@ const Index = () => {
   const [isFiltering, setIsFiltering] = useState(false);
   const [trendSelectionKey, setTrendSelectionKey] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [isCriticalTicketsOpen, setIsCriticalTicketsOpen] = useState(false);
-  const [criticalTicketsFilters, setCriticalTicketsFilters] = useState<TableFilters | null>(null);
   const filterTimerRef = useRef<number | null>(null);
   const defaultCustomRange = useCallback(() => {
     const now = new Date();
@@ -318,26 +314,9 @@ const Index = () => {
     ),
     [needsAttentionData]
   );
-  const handleViewCriticalTickets = useCallback(() => {
-    const filters: TableFilters = {
-      ...DEFAULT_FILTERS,
-      urgencies: ['critical'],
-      statuses: ['unresolved', 'in_progress'],
-      timePreset: '7d',
-    };
-    setCriticalTicketsFilters(filters);
-    setIsCriticalTicketsOpen(true);
-  }, []);
-
   const insightsContent = useMemo(
-    () => (
-      <NeedsAttentionOverlay
-        data={needsAttentionData}
-        variant="insights"
-        onViewCriticalTickets={handleViewCriticalTickets}
-      />
-    ),
-    [needsAttentionData, handleViewCriticalTickets]
+    () => <NeedsAttentionOverlay data={needsAttentionData} variant="insights" />,
+    [needsAttentionData]
   );
 
   return (
@@ -423,8 +402,8 @@ const Index = () => {
                         </TooltipTrigger>
                         <TooltipContent side="top" className="z-[60] max-w-none whitespace-nowrap">
                           <div className="space-y-1 text-xs">
-                            <p>• % critical = critical <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">/</code> total tickets in current window</p>
-                            <p>• Trend % = (current critical - previous critical) <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">/</code> previous critical</p>
+                            <p>• % critical = critical / total tickets in current window</p>
+                            <p>• Trend % = (current critical - previous critical) / previous critical</p>
                             <p>• Counts unresolved Critical and High urgency tickets</p>
                           </div>
                         </TooltipContent>
@@ -498,19 +477,6 @@ const Index = () => {
         }
         onTimeRangeSelect={handleTrendRangeSelect}
       />
-      <Dialog open={isCriticalTicketsOpen} onOpenChange={setIsCriticalTicketsOpen}>
-        <DialogContent className="w-[90vw] max-w-none max-h-[80vh] overflow-hidden">
-          <FeedbackTable
-            key="critical-tickets"
-            feedback={feedback}
-            initialFiltersOverride={criticalTicketsFilters ?? undefined}
-            disableUrlSync
-            stickyTableHeader
-            containerClassName="flex flex-col max-h-[72vh]"
-            bodyScrollClassName="flex-1 overflow-y-auto"
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
