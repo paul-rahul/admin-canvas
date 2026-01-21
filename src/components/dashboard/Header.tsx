@@ -39,10 +39,26 @@ export function Header({
     if (!isOverlayOpen) return;
     const handleClose = (event: MouseEvent) => {
       if (overlayLock) return;
-      const target = event.target as Node;
+      const target = event.target as HTMLElement;
+      
+      // Check if click is within the overlay or button
       if (overlayRef.current?.contains(target) || bellRef.current?.contains(target)) {
         return;
       }
+      
+      // Check if click is on tooltip content (Radix UI tooltips are in portals)
+      const isTooltipContent = 
+        target.closest('[role="tooltip"]') !== null ||
+        target.closest('[data-radix-tooltip-content]') !== null ||
+        target.closest('[data-radix-popper-content-wrapper]') !== null ||
+        target.getAttribute('role') === 'tooltip' ||
+        target.closest('[class*="tooltip"]')?.getAttribute('role') === 'tooltip' ||
+        (target.closest('[data-radix-portal]') && target.closest('[role="tooltip"]')) !== null;
+      
+      if (isTooltipContent) {
+        return;
+      }
+      
       setIsOverlayOpen(false);
     };
     window.addEventListener('mousedown', handleClose);
@@ -53,10 +69,28 @@ export function Header({
     if (!isInsightsOpen) return;
     const handleClose = (event: MouseEvent) => {
       if (overlayLock) return;
-      const target = event.target as Node;
+      const target = event.target as HTMLElement;
+      
+      // Check if click is within the overlay or button
       if (insightsRef.current?.contains(target) || insightsButtonRef.current?.contains(target)) {
         return;
       }
+      
+      // Check if click is on tooltip content (Radix UI tooltips are in portals)
+      // Check for various tooltip-related attributes and roles
+      const isTooltipContent = 
+        target.closest('[role="tooltip"]') !== null ||
+        target.closest('[data-radix-tooltip-content]') !== null ||
+        target.closest('[data-radix-popper-content-wrapper]') !== null ||
+        target.getAttribute('role') === 'tooltip' ||
+        target.closest('[class*="tooltip"]')?.getAttribute('role') === 'tooltip' ||
+        // Check if target is within a Radix Portal that contains tooltip content
+        (target.closest('[data-radix-portal]') && target.closest('[role="tooltip"]')) !== null;
+      
+      if (isTooltipContent) {
+        return;
+      }
+      
       setIsInsightsOpen(false);
     };
     window.addEventListener('mousedown', handleClose);
@@ -144,7 +178,7 @@ export function Header({
             {isInsightsOpen && insightsContent && (
               <div
                 ref={insightsRef}
-                className="absolute right-0 top-full mt-2 w-[min(480px,90vw)] z-50"
+                className="absolute right-0 top-full mt-2 w-[min(1050px,92vw)] z-50"
               >
                 <div className="relative">
                   <Button

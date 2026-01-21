@@ -71,7 +71,14 @@ export const buildNeedsAttentionData = (feedback: FeedbackItem[]): NeedsAttentio
       entry,
     }));
 
-  const emerging = entries.length ? computeEmergingThemes(entries, [], new Date(now), 7, 4) : [];
+  // For emerging themes, we need entries from the last 14 days to compare current (last 7d) vs previous (7-14d ago)
+  const emergingWindowStart = now - 14 * DAY_MS;
+  const entriesForEmerging = feedback.filter((entry) => {
+    const ts = getTimestampMs(entry);
+    return ts >= emergingWindowStart && ts <= now;
+  });
+
+  const emerging = entriesForEmerging.length ? computeEmergingThemes(entriesForEmerging, [], new Date(now), 7, 4) : [];
 
   return { entries, alerts, emerging };
 };
@@ -80,10 +87,12 @@ export function NeedsAttentionOverlay({
   data,
   onAlertSelect,
   variant = 'all',
+  onViewCriticalTickets,
 }: {
   data: NeedsAttentionData;
   onAlertSelect?: (alert: NeedsAttentionAlert) => void;
   variant?: 'all' | 'alerts' | 'insights';
+  onViewCriticalTickets?: () => void;
 }) {
   const emerging = data.emerging;
   const alertItems = data.alerts;
@@ -95,7 +104,7 @@ export function NeedsAttentionOverlay({
 
   const content = useMemo(
     () => (
-      <section className="space-y-3 rounded-xl border border-border/60 bg-background p-4 shadow-card">
+      <section className="space-y-3 rounded-xl border border-border/60 bg-background p-4 shadow-card max-h-[70vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">{title}</h3>
         </div>
@@ -337,8 +346,7 @@ export function NeedsAttentionOverlay({
           </div>
         ) : null}
         {!showAlerts && showInsights ? (
-          <div className="space-y-2">
-            <AIInsights feedback={data.entries} compact />
+          <div className="grid grid-cols-1 md:grid-cols-[5fr_6fr] gap-4">
             <div className={`rounded-xl border border-border/60 p-4 ${emergingCardClass}`}>
               <div className="mb-3">
                 <div className="flex items-center gap-2">
@@ -368,7 +376,7 @@ export function NeedsAttentionOverlay({
                 <p className="text-xs text-muted-foreground">Last 7 days only</p>
               </div>
               {emerging.length ? (
-                <div className="grid gap-3 max-h-[360px] overflow-y-auto pr-1 md:grid-cols-2">
+                <div className="grid gap-3 max-h-[240px] overflow-y-auto pr-1 md:grid-cols-2">
                   {emerging.slice(0, 4).map((theme) => {
                     const mentionDeltaPercent =
                       theme.prevCount > 0
@@ -415,11 +423,12 @@ export function NeedsAttentionOverlay({
                 </div>
               )}
             </div>
+            <AIInsights feedback={data.entries} compact onViewCriticalTickets={onViewCriticalTickets} />
           </div>
         ) : null}
       </section>
     ),
-    [alertItems, emerging, data.entries, onAlertSelect, showAlerts, showInsights, title]
+    [alertItems, emerging, data.entries, onAlertSelect, showAlerts, showInsights, title, onViewCriticalTickets]
   );
 
   return content;

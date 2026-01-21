@@ -1,5 +1,4 @@
 # Cerebro User Guide
-## Product Feedback Dashboard
 
 Welcome to **Cerebro**, your comprehensive product feedback dashboard. This guide will help you navigate and utilize all features to effectively triage feedback, monitor product health, and make data-driven decisions.
 
@@ -86,7 +85,7 @@ The header bar appears at the top of every page and contains:
 - **Alerts Button** (🔔): Opens "Needs Attention" overlay
   - Shows count badge for active alerts
   - Displays critical and high-priority unresolved tickets
-- **Help Center Button** (❓): Opens help documentation in a new tab
+- **User Guide Button** (📘): Opens user guide documentation in a new tab with blue background for easy identification
 
 ### Page Layout
 
@@ -127,7 +126,20 @@ The KPI strip displays four key metrics:
    - Shows count and percentage
 
 4. **Theme Distribution**
-   - Visual breakdown of issue types
+   - Visual breakdown of issue types with color-coded bar charts
+   - Each issue type has a distinct color for easy identification:
+     - Bug: Red
+     - Feature: Blue
+     - Performance: Orange
+     - UX: Yellow-Green
+     - Pricing: Green
+     - Documentation: Grey
+     - Account Access: Purple
+     - Billing: Pink/Magenta
+     - Reliability: Deep Orange
+     - Integration: Teal
+   - Shows percentage and count for each theme
+   - Displays critical percentage for each theme
    - Click to filter by specific issue type
 
 **Interaction**: Hover over any KPI card to see a tooltip with additional details.
@@ -313,8 +325,9 @@ Each alert shows comprehensive information:
 Shows trending issues that are increasing in frequency:
 
 **How Emerging Issues Are Identified**:
-- Compares feedback from the last 7 days to the previous 7 days
-- Highlights issues that are growing significantly
+- Analyzes feedback from the last 14 days to ensure accurate comparison
+- Compares feedback from the last 7 days to the previous 7 days (7-14 days ago)
+- Highlights issues that are growing significantly in volume, urgency, or negative sentiment
 - Shows you the growth rate and whether trends are improving or worsening
 - Recommends which team should handle each issue based on the type of problem
 
@@ -353,12 +366,19 @@ If "Performance" issues show "+50%" growth:
 #### AI Insights Tab
 Displays AI-powered analysis of feedback patterns using Cloudflare Workers AI:
 
+**Layout**:
+- **2x2 Grid Format**: Four insights displayed in a grid layout for easy scanning
+- **Emerging Issues Panel**: Shows on the left side with trending themes
+- **AI Insights Panel**: Shows on the right side with AI-generated insights
+- **Info Icon**: Hover over the info icon next to "AI Insights" title to learn how insights are generated
+
 **Insight Types**:
 
 1. **Critical Issues** (Warning - Orange/Yellow):
    - Count of unresolved critical tickets
    - Requires immediate attention
    - Actionable recommendations
+   - **"View Tickets" Button**: Click to open filtered view showing all critical unresolved tickets from the last 7 days
 
 2. **Trending Topics** (Info - Blue):
    - Most discussed themes in feedback
@@ -370,17 +390,24 @@ Displays AI-powered analysis of feedback patterns using Cloudflare Workers AI:
    - Suggested improvements
    - Prioritization recommendations
 
+4. **Additional Insight** (Primary - Custom Color):
+   - Fourth insight varies based on current data patterns
+   - May include resolution status, sentiment trends, or other key metrics
+
 **Insight Structure**:
 Each insight includes:
 - **Title**: Concise summary
 - **Content**: Detailed explanation with counts and context
-- **Type**: Visual indicator (warning/info/success)
+- **Type**: Visual indicator (warning/info/success/primary) with distinct color coding
 - **Actionability**: What to do with this insight
+- **Interactive Elements**: Critical Issues insight includes "View Tickets" button
 
 **How It Works**:
-- Automatically analyzes all your feedback data
+- Automatically analyzes all your feedback data using Cloudflare Workers AI
+- Analyzes ticket volumes, sentiment distributions, urgency patterns, customer segments, and recent negative feedback
 - Identifies patterns and trends you might miss
 - Provides actionable recommendations based on data
+- Generates exactly 4 insights for consistent display
 - Updates as new feedback comes in
 
 **Always Available**:
@@ -391,8 +418,9 @@ Even if advanced AI analysis isn't available, you'll still see valuable insights
 - Overall product health indicators
 
 **Interaction**:
-- **Hover**: See additional context
-- **Click Insight**: (Future: Filter to related tickets)
+- **Hover Info Icon**: Learn how insights are generated
+- **Click "View Tickets"**: On Critical Issues insight, opens filtered ticket view
+- **Hover Insight Cards**: See additional context
 - **Refresh**: Click refresh button to update insights
 - **Auto-Update**: Insights refresh when data updates
 
@@ -1989,7 +2017,19 @@ A: Charts can be exported via screenshot. Data export is available via CSV expor
 A: Charts aggregate data into buckets based on time range. Longer ranges use larger buckets.
 
 **Q: Can I customize chart colors?**
-A: Chart colors are fixed and follow the design system. Customization is not available.
+A: Chart colors are fixed and follow the design system. Each theme/issue type has a distinct color for easy identification:
+- Bug: Red
+- Feature: Blue
+- Performance: Orange
+- UX: Yellow-Green
+- Pricing: Green
+- Documentation: Grey
+- Account Access: Purple
+- Billing: Pink/Magenta
+- Reliability: Deep Orange
+- Integration: Teal
+
+These colors are designed to be easily distinguishable and consistent across all charts and visualizations.
 
 #### Integration Questions
 
@@ -2489,7 +2529,7 @@ Currently not implemented, but potential shortcuts:
 
 ### Getting Help
 
-1. **Help Center**: Click help button (❓) in header
+1. **User Guide**: Click User Guide button (📘) in header
 2. **Documentation**: See README.md for technical details
 3. **Issues**: Report bugs via GitHub issues
 
@@ -2674,7 +2714,7 @@ When you apply filters, the web address automatically updates. Here are examples
 ### Contact & Support
 
 **Help Resources**:
-- Help Center: Click ❓ in header
+- User Guide: Click 📘 button in header (blue background for easy identification)
 - Documentation: This guide
 - Technical Docs: README.md
 - Issues: GitHub issues (if applicable)
@@ -2682,7 +2722,7 @@ When you apply filters, the web address automatically updates. Here are examples
 **Getting Help**:
 1. Check this guide first
 2. Review Troubleshooting section
-3. Check Help Center
+3. Click User Guide button in header
 4. Contact support team
 5. Report bugs via GitHub
 

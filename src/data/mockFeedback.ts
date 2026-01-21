@@ -561,12 +561,45 @@ const buildMockFeedback = (): TicketRecord[] => {
 
   const tagAssignments = assignTags();
 
+  // Define time buckets with specific distributions to create emerging issues
+  const last24hCount = 80;
+  const last7dCount = 250;
+  const last30dCount = 600;
+  const lastYearCount = 2400;
+  
+  // Calculate remaining entries for older periods
+  const remainingEntries = totalEntries - lastYearCount;
+  
   const bucketCounts = [
     {
-      key: 'fullYear',
-      start: now - 365 * dayMs,
+      key: 'last24h',
+      start: now - 24 * 60 * 60 * 1000,
       end: now,
-      count: totalEntries,
+      count: last24hCount,
+    },
+    {
+      key: 'last7d_excluding24h',
+      start: now - 7 * dayMs,
+      end: now - 24 * 60 * 60 * 1000,
+      count: last7dCount - last24hCount,
+    },
+    {
+      key: 'last30d_excluding7d',
+      start: now - 30 * dayMs,
+      end: now - 7 * dayMs,
+      count: last30dCount - last7dCount,
+    },
+    {
+      key: 'lastYear_excluding30d',
+      start: now - 365 * dayMs,
+      end: now - 30 * dayMs,
+      count: lastYearCount - last30dCount,
+    },
+    {
+      key: 'older',
+      start: new Date('2012-01-01T00:00:00Z').getTime(),
+      end: now - 365 * dayMs,
+      count: remainingEntries,
     },
   ];
 
@@ -593,9 +626,79 @@ const buildMockFeedback = (): TicketRecord[] => {
     return timestamps;
   };
 
-  const timePool = bucketCounts.flatMap((bucket) =>
-    generateBucketTimestamps(bucket.count, bucket.start, bucket.end, 0)
-  );
+  // Create time pools for each bucket
+  const timePoolsByBucket = new Map<string, number[]>();
+  bucketCounts.forEach((bucket) => {
+    const timestamps = generateBucketTimestamps(bucket.count, bucket.start, bucket.end, 0);
+    timePoolsByBucket.set(bucket.key, timestamps);
+  });
+
+  // Create emerging issues by ensuring some issue types have spikes in the last 7 days
+  // compared to 7-14 days ago
+  const emergingIssueTypes: IssueType[] = ['performance', 'bug', 'ux', 'feature'];
+  
+  // Get time pools
+  const last24hPool = timePoolsByBucket.get('last24h') ?? [];
+  const last7dPool = timePoolsByBucket.get('last7d_excluding24h') ?? [];
+  const last30dPool = timePoolsByBucket.get('last30d_excluding7d') ?? [];
+  const lastYearPool = timePoolsByBucket.get('lastYear_excluding30d') ?? [];
+  const olderPool = timePoolsByBucket.get('older') ?? [];
+  
+  // Combine pools
+  const last7dAll = [...last24hPool, ...last7dPool];
+  const last30dAll = [...last30dPool];
+  const lastYearAll = [...lastYearPool];
+  const allOlder = [...olderPool];
+  
+  // Create strategic time assignment: assign emerging issue types more to last 7 days
+  const timePool: number[] = [];
+  const last7dTimestamps = [...last7dAll];
+  const last30dTimestamps = [...last30dAll];
+  const lastYearTimestamps = [...lastYearAll];
+  const olderTimestamps = [...allOlder];
+  
+  // Shuffle pools for random distribution
+  shuffle(last7dTimestamps);
+  shuffle(last30dTimestamps);
+  shuffle(lastYearTimestamps);
+  shuffle(olderTimestamps);
+  
+  let last7dIdx = 0;
+  let last30dIdx = 0;
+  let lastYearIdx = 0;
+  let olderIdx = 0;
+  
+  for (let i = 0; i < totalEntries; i++) {
+    const issueType = issuePool[i % issuePool.length];
+    const isEmergingType = emergingIssueTypes.includes(issueType);
+    
+    // For emerging issue types, prioritize last 7 days (60% chance)
+    // For others, distribute more evenly
+    if (isEmergingType && last7dIdx < last7dTimestamps.length && nextRandom() < 0.6) {
+      timePool.push(last7dTimestamps[last7dIdx++]);
+    } else if (last7dIdx < last7dTimestamps.length && nextRandom() < 0.25) {
+      timePool.push(last7dTimestamps[last7dIdx++]);
+    } else if (last30dIdx < last30dTimestamps.length && nextRandom() < 0.3) {
+      timePool.push(last30dTimestamps[last30dIdx++]);
+    } else if (lastYearIdx < lastYearTimestamps.length && nextRandom() < 0.4) {
+      timePool.push(lastYearTimestamps[lastYearIdx++]);
+    } else if (olderIdx < olderTimestamps.length) {
+      timePool.push(olderTimestamps[olderIdx++]);
+    } else {
+      // Fallback: distribute remaining
+      if (last7dIdx < last7dTimestamps.length) {
+        timePool.push(last7dTimestamps[last7dIdx++]);
+      } else if (last30dIdx < last30dTimestamps.length) {
+        timePool.push(last30dTimestamps[last30dIdx++]);
+      } else if (lastYearIdx < lastYearTimestamps.length) {
+        timePool.push(lastYearTimestamps[lastYearIdx++]);
+      } else {
+        // Final fallback
+        timePool.push(now - nextRandom() * 365 * dayMs);
+      }
+    }
+  }
+  
   const shuffledTimePool = shuffle(timePool);
 
   const pickSentiment = (urgency: Urgency) => {
@@ -666,9 +769,36 @@ const buildMockFeedback = (): TicketRecord[] => {
   for (let i = 0; i < totalEntries; i += 1) {
     const source = sourcePool[i % sourcePool.length];
     const issueType = issuePool[i % issuePool.length];
-    const urgency = urgencyPool[i % urgencyPool.length];
-    const sentiment = pickSentiment(urgency);
+    let urgency = urgencyPool[i % urgencyPool.length];
     let timestampMs = shuffledTimePool[i % shuffledTimePool.length];
+    
+    // Adjust urgency for emerging issue types in recent periods to create urgency escalation
+    const isEmergingType = emergingIssueTypes.includes(issueType);
+    const ageDays = Math.max(0, (now - timestampMs) / dayMs);
+    const isInLast7d = ageDays <= 7;
+    const isInLast14d = ageDays <= 14 && ageDays > 7;
+    
+    if (isEmergingType && isInLast7d) {
+      // Boost urgency for emerging types in last 7 days
+      const roll = nextRandom();
+      if (roll < 0.3 && urgency === 'low') {
+        urgency = 'medium';
+      } else if (roll < 0.5 && urgency === 'medium') {
+        urgency = 'high';
+      } else if (roll < 0.2 && urgency === 'high') {
+        urgency = 'critical';
+      }
+    } else if (isEmergingType && isInLast14d) {
+      // Slightly lower urgency for 7-14 days ago to create contrast
+      const roll = nextRandom();
+      if (roll < 0.3 && urgency === 'high') {
+        urgency = 'medium';
+      } else if (roll < 0.2 && urgency === 'critical') {
+        urgency = 'high';
+      }
+    }
+    
+    const sentiment = pickSentiment(urgency);
     const incident = INCIDENTS.find((entry) => entry.issueType === issueType);
     const keywordTokens: string[] = [];
     if (incident && nextRandom() < incident.chance) {
@@ -691,7 +821,6 @@ const buildMockFeedback = (): TicketRecord[] => {
       .replace('{keywords}', keywordText);
     const content = `${description} Please prioritize.`;
     const timestamp = new Date(timestampMs);
-    const ageDays = Math.max(0, (now - timestampMs) / dayMs);
     const status = pickStatus(ageDays, urgency);
     const owner = pickOwner(issueType);
     const oldTicket: OldTicket = {

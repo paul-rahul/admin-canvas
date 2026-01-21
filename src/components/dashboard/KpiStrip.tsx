@@ -38,6 +38,21 @@ function KpiStripComponent({
     [entries, filters]
   );
   const feedbackEntries = filteredEntries as FeedbackItem[];
+  const issueTypeColors: Record<string, string> = {
+    bug: '#d32f2f', // Red
+    feature: '#1976d2', // Blue  
+    performance: '#f57c00', // Orange
+    ux: '#689f38', // Yellow-Green/Lime
+    pricing: '#388e3c', // Green
+    documentation: '#616161', // Grey
+    account_access: '#7b1fa2', // Purple
+    billing: '#c2185b', // Pink/Magenta
+    reliability: '#d84315', // Deep Orange/Red
+    integration: '#0097a7', // Teal
+    unknown: '#616161', // Grey
+    other: '#616161', // Grey
+  };
+
   const issueTypeData = useMemo(() => {
     const counts: Record<string, number> = {};
     const criticalCounts: Record<string, number> = {};
@@ -59,6 +74,7 @@ function KpiStripComponent({
         color:
           issueTypeConfig[issueType as keyof typeof issueTypeConfig]?.color ??
           'bg-muted-foreground',
+        bgColor: issueTypeColors[issueType] ?? issueTypeColors.unknown,
       }))
       .sort((a, b) => b.count - a.count);
     if (sorted.length <= 4) return sorted;
@@ -79,6 +95,7 @@ function KpiStripComponent({
           : 0,
         label: 'Others',
         color: 'bg-muted-foreground',
+        bgColor: issueTypeColors.other,
         breakdown: rest.map((entry) => ({
           label: entry.label,
           count: entry.count,
@@ -237,15 +254,15 @@ function KpiStripComponent({
       valueHidden
       valueSpacerClassName="h-1"
     >
-      <div className="mt-2 flex w-full flex-1 items-center justify-center">
-        <div className="w-full max-w-xs space-y-1">
+      <div className="mt-2 flex w-full flex-1 flex-col">
+        <div className="w-full max-w-xs flex flex-col h-full">
           {issueTypeData.map((entry) => {
             const isTop = entry.issueType === kpis.topIssueType?.issueType;
             return (
-              <div key={entry.issueType} className="w-full space-y-0.5">
+              <div key={entry.issueType} className="flex-1 flex flex-col justify-center min-h-0">
                 <div
                   className={[
-                    "flex items-center justify-between text-xs",
+                    "flex items-center justify-between text-xs mb-1 flex-shrink-0",
                     isTop ? "text-foreground font-semibold" : "text-muted-foreground",
                   ].join(' ')}
                 >
@@ -284,10 +301,15 @@ function KpiStripComponent({
                   </span>
                   <span>{entry.count}</span>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div className="flex-1 w-full rounded-full bg-muted overflow-hidden min-h-[8px]">
                   <div
-                    className={`h-full rounded-full ${entry.color} ${isTop ? "shadow-[0_0_12px_hsl(var(--primary)/0.6)]" : ""}`}
-                    style={{ width: `${entry.percent}%` }}
+                    className={`h-full rounded-full ${isTop ? "shadow-[0_0_12px_hsl(var(--primary)/0.6)]" : ""}`}
+                    style={{ 
+                      width: `${entry.percent}%`, 
+                      backgroundColor: entry.bgColor || issueTypeColors[entry.issueType] || issueTypeColors.unknown,
+                      minHeight: '8px',
+                      display: 'block'
+                    }}
                   />
                 </div>
               </div>
