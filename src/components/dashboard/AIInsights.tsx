@@ -19,6 +19,9 @@ type Insight = {
 type InsightPayload = {
   insights: Insight[];
   summary?: string;
+  source?: 'ai' | 'fallback';
+  aiAvailable?: boolean;
+  aiError?: string;
 };
 
 function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets }: AIInsightsProps) {
@@ -128,8 +131,21 @@ function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets 
         <div className="p-1.5 rounded-lg gradient-primary">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
           <h3 className="text-base font-semibold">AI Insights</h3>
+          {serverInsights?.source === 'ai' ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success border border-success/30">
+              AI Generated
+            </span>
+          ) : serverInsights?.aiAvailable ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning border border-warning/30">
+              Fallback Mode
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+              AI Not Available
+            </span>
+          )}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -144,7 +160,19 @@ function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets 
               <TooltipContent side="top" className="max-w-xs text-xs whitespace-normal">
                 <div className="space-y-2">
                   <p className="font-semibold">How AI Insights are Generated</p>
-                  <p>Insights are powered by Cloudflare Workers AI, analyzing feedback data including:</p>
+                  {serverInsights?.source === 'ai' ? (
+                    <p className="text-success">✓ Using Cloudflare Workers AI</p>
+                  ) : serverInsights?.aiAvailable ? (
+                    <div>
+                      <p className="text-warning">⚠ Using fallback insights</p>
+                      {serverInsights?.aiError && (
+                        <p className="text-xs text-muted-foreground mt-1">Error: {serverInsights.aiError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">AI binding not configured. Using default insights.</p>
+                  )}
+                  <p>Insights analyze your feedback data including:</p>
                   <ul className="list-disc list-inside space-y-1 ml-1">
                     <li>Ticket volumes and trends</li>
                     <li>Sentiment and urgency distributions</li>
@@ -152,6 +180,9 @@ function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets 
                     <li>Customer segments and resolution status</li>
                     <li>Critical issues and recent negative feedback</li>
                   </ul>
+                  {serverInsights?.source === 'ai' && (
+                    <p className="text-muted-foreground">The AI generates actionable insights to help prioritize work and understand product health.</p>
+                  )}
                 </div>
               </TooltipContent>
             </Tooltip>

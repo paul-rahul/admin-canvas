@@ -146,7 +146,8 @@ const parseAiPayload = (text: string) => {
 
 const buildInsights = async (ai: AiBinding | undefined, items: FeedbackApiItem[]) => {
   if (!ai) {
-    return defaultInsights(items);
+    const defaultResult = defaultInsights(items);
+    return { ...defaultResult, source: 'fallback', aiAvailable: false };
   }
 
   const counts = computeCounts(items);
@@ -290,6 +291,8 @@ Important: Return ONLY the JSON object, no markdown, no code blocks, no explanat
         return {
           insights: finalInsights,
           summary: parsed.summary?.trim() || defaultInsights(items).summary,
+          source: 'ai',
+          aiAvailable: true,
         };
       } else {
         console.warn('[AI Insights] No valid insights found in parsed response');
@@ -300,10 +303,12 @@ Important: Return ONLY the JSON object, no markdown, no code blocks, no explanat
   } catch (error) {
     console.error('[AI Insights] Error calling Workers AI:', error);
     // Return default insights on error
-    return defaultInsights(items);
+    const defaultResult = defaultInsights(items);
+    return { ...defaultResult, source: 'fallback', aiAvailable: true, aiError: String(error) };
   }
 
-  return defaultInsights(items);
+  const defaultResult = defaultInsights(items);
+  return { ...defaultResult, source: 'fallback', aiAvailable: true };
 };
 
 export const onRequest: PagesFunction = async ({ env }) => {
@@ -333,7 +338,12 @@ export const onRequest: PagesFunction = async ({ env }) => {
     console.log(`[AI Insights] Processing ${sourceItems.length} feedback items`);
     console.log(`[AI Insights] AI binding available: ${!!env.AI}`);
 
-    const insights = await buildInsights(env.AI as AiBinding | undefined, sourceItems);
+    const insightsResult = await buildInsights(env.AI as AiBinding | undefined, sourceItems);
+    
+    // Log the source for debugging
+    console.log(`[AI Insights] Source: ${insightsResult.source}, AI Available: ${insightsResult.aiAvailable}`);
+    
+    const insights = insightsResult;
 
     return new Response(JSON.stringify(insights), {
       headers: {

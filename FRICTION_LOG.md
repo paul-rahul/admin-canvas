@@ -416,13 +416,187 @@ Commands used `database_name`, but it wasn't clear:
 
 ---
 
+### 26. Workers AI Binding Configuration: Hidden in Dashboard, Not in Code
+**Problem:** Workers AI binding must be configured in Cloudflare Dashboard under Pages Settings > Functions, but:
+- No indication in `wrangler.toml` that AI binding needs to be configured
+- Configuration is not visible in code or version control
+- No way to verify if AI binding is configured without checking dashboard
+- No clear documentation on where to find Workers AI settings
+- Binding configuration is separate from other bindings (D1 is in wrangler.toml, AI is not)
+
+**Suggestion:**
+- Add Workers AI binding configuration to `wrangler.toml` similar to D1 bindings:
+  ```toml
+  [[ai_bindings]]
+  binding = "AI"
+  ```
+- Or document clearly that AI bindings must be configured in dashboard
+- Add `wrangler pages bindings list` command showing all configured bindings including AI
+- Show AI binding status in deployment logs
+- Provide a "Configure Workers AI" button/link in dashboard that's easy to find
+
+---
+
+### 27. Workers AI Availability: No Way to Verify if AI is Working
+**Problem:** After deployment, there's no clear way to verify:
+- If Workers AI binding is configured correctly
+- If AI is actually being used vs. falling back to default insights
+- If AI requests are succeeding or failing silently
+- What model is being used and if it's available
+
+The code falls back silently to default insights, so users don't know if AI is working.
+
+**Suggestion:**
+- Add AI binding status check endpoint: `/api/ai-status` that returns:
+  ```json
+  { "enabled": true, "model": "@cf/meta/llama-3-8b-instruct", "available": true }
+  ```
+- Show AI status in dashboard (enabled/disabled, model, last successful request)
+- Add logging/indicators when AI is used vs. fallback
+- Provide `wrangler pages ai status` command
+- Show AI usage metrics in dashboard (requests, success rate, latency)
+
+---
+
+### 28. Workers AI Error Handling: Silent Failures and Unclear Fallbacks
+**Problem:** When Workers AI fails or is unavailable:
+- Errors are caught silently and fallback to default insights
+- No indication to users that AI failed
+- No error logs visible in dashboard
+- No way to debug why AI isn't working (binding issue? model unavailable? rate limit?)
+- Frontend can't distinguish between AI-generated and fallback insights
+
+**Suggestion:**
+- Add error logging for AI failures (visible in dashboard)
+- Return metadata in API response indicating if insights are AI-generated or fallback:
+  ```json
+  { "insights": [...], "source": "ai" | "fallback", "aiError": "..." }
+  ```
+- Show clear error messages when AI binding is missing
+- Provide debugging information: binding status, model availability, error details
+- Add retry logic with exponential backoff for transient failures
+- Document common AI errors and solutions
+
+---
+
+### 29. Workers AI Local Development: No Way to Test Locally
+**Problem:** Testing Workers AI integration requires:
+- Full deployment to Cloudflare Pages
+- Manual configuration in dashboard
+- No local testing capability with `wrangler pages dev`
+- Can't iterate quickly on AI prompts or response handling
+- No way to test AI without deploying
+
+**Suggestion:**
+- Add `wrangler pages dev` support for Workers AI bindings
+- Provide local AI emulator or mock for development
+- Allow testing AI with local credentials/API keys
+- Add `--ai-enabled` flag to `wrangler pages dev`
+- Document local AI testing workflow
+- Provide example code for mocking AI responses during development
+
+---
+
+### 30. Workers AI Model Selection: Unclear Model Availability and Selection
+**Problem:** The code uses `@cf/meta/llama-3-8b-instruct`, but:
+- Not clear if this model is available in all regions/accounts
+- No way to check model availability before using it
+- No documentation on which models are available
+- No fallback if model is unavailable
+- Model selection is hardcoded, not configurable
+
+**Suggestion:**
+- Document available Workers AI models and their use cases
+- Add `wrangler ai models list` command showing available models
+- Provide model selection guidance (when to use which model)
+- Add model availability check before making requests
+- Allow model selection via environment variable or config
+- Show model information in dashboard (available models, recommended models)
+
+---
+
+### 31. Workers AI Response Parsing: Fragile JSON Extraction
+**Problem:** Parsing AI responses requires:
+- Extracting JSON from potentially markdown-wrapped responses
+- Handling cases where AI returns extra text before/after JSON
+- No validation that response matches expected schema
+- Silent failures if JSON parsing fails
+- No retry logic for malformed responses
+
+**Suggestion:**
+- Provide structured response format from Workers AI (always return JSON)
+- Add response validation helpers/utilities
+- Document expected response format clearly
+- Provide TypeScript types for AI responses
+- Add schema validation for AI responses
+- Show parsing errors in logs for debugging
+
+---
+
+### 32. Workers AI Prompt Engineering: No Testing or Iteration Tools
+**Problem:** Developing effective AI prompts requires:
+- Full deployment cycle to test changes
+- No way to test prompts locally
+- No prompt versioning or A/B testing
+- No visibility into what prompts are being used
+- Can't iterate quickly on prompt improvements
+
+**Suggestion:**
+- Add `wrangler ai test-prompt` command for local prompt testing
+- Provide prompt templates and examples in documentation
+- Add prompt versioning/management in dashboard
+- Show prompt performance metrics (response quality, success rate)
+- Allow prompt configuration via environment variables
+- Provide prompt debugging tools (show full request/response)
+
+---
+
+### 33. Workers AI Cost Visibility: No Usage or Cost Tracking
+**Problem:** Using Workers AI has no visibility into:
+- How many AI requests are being made
+- Cost per request or total costs
+- Rate limits or quotas
+- Usage trends over time
+- Which endpoints are using AI most
+
+**Suggestion:**
+- Add AI usage dashboard showing:
+  - Requests per day/week/month
+  - Cost estimates
+  - Rate limit status
+  - Usage by endpoint/function
+- Provide `wrangler ai usage` command
+- Show usage warnings when approaching limits
+- Add cost alerts/notifications
+- Document pricing clearly (free tier, paid tier limits)
+
+---
+
+### 34. Workers AI Documentation: Scattered and Incomplete
+**Problem:** Workers AI documentation is:
+- Not clearly linked from Pages Functions docs
+- Missing examples for Pages Functions (most examples are for Workers)
+- No clear getting started guide for Pages + AI
+- Doesn't explain binding configuration process
+- Missing troubleshooting guide
+
+**Suggestion:**
+- Create dedicated "Workers AI with Pages Functions" guide
+- Add Workers AI section to Pages Functions documentation
+- Provide step-by-step setup guide with screenshots
+- Include common use cases and examples
+- Add troubleshooting section for common issues
+- Link AI docs from Pages Functions docs prominently
+
+---
+
 ## Summary Statistics
-- **Total Friction Points:** 25
-- **Critical Issues:** 5 (Rate limits, Module resolution, Deployment verification, Functions configuration, Error handling)
-- **Documentation Gaps:** 12
-- **Missing Features:** 10
-- **Error Message Issues:** 8
-- **Developer Experience Issues:** 8
+- **Total Friction Points:** 34
+- **Critical Issues:** 6 (Rate limits, Module resolution, Deployment verification, Functions configuration, Error handling, AI binding configuration)
+- **Documentation Gaps:** 15
+- **Missing Features:** 13
+- **Error Message Issues:** 9
+- **Developer Experience Issues:** 11
 
 ## Priority Recommendations
 
@@ -430,12 +604,17 @@ Commands used `database_name`, but it wasn't clear:
 1. **Improve D1 rate limit error messages** - Include attempted count, limit, and specific guidance
 2. **Fix Pages Functions error handling** - Always return JSON, never HTML fallbacks
 3. **Make Functions configuration visible** - Show Functions status prominently in dashboard
+4. **Workers AI binding configuration** - Add to wrangler.toml or make dashboard configuration more discoverable
+5. **Workers AI error visibility** - Show when AI fails vs. succeeds, add error logging
 
 ### High Priority (P1)
 4. **Add Pages Functions development workflow** - Local dev server with hot-reload
 5. **Document Pages Functions module resolution** - When/how code executes, import behavior
 6. **Improve deployment verification** - Show Functions status, deployment SHA, health checks
 7. **Standardize error response format** - Consistent JSON error structure across all Functions
+8. **Workers AI local testing** - Support for testing AI locally with wrangler pages dev
+9. **Workers AI status verification** - Add endpoint/command to check if AI is working
+10. **Workers AI documentation** - Create comprehensive guide for Pages Functions + AI integration
 
 ### Medium Priority (P2)
 8. **Add D1 data validation tools** - Built-in commands to verify data quality
@@ -443,9 +622,15 @@ Commands used `database_name`, but it wasn't clear:
 10. **Add pre-deployment validation** - Check Functions syntax, bindings, directory structure
 11. **Provide real-time logging** - Live logs during development and deployment
 12. **Improve D1 remote/local detection** - Auto-detect and suggest `--remote` flag
+13. **Workers AI model selection** - Document available models, add model availability checks
+14. **Workers AI response validation** - Better JSON parsing, schema validation, error handling
+15. **Workers AI cost visibility** - Usage dashboard, cost tracking, rate limit warnings
 
 ### Nice to Have (P3)
 13. **Add migration rollback** - Ability to undo D1 migrations
 14. **Query performance metrics** - Visibility into D1 query performance
 15. **Deployment previews** - Preview Functions in pull requests
 16. **TypeScript type improvements** - Better types for Functions and D1
+17. **Workers AI prompt testing** - Tools for testing and iterating on prompts locally
+18. **Workers AI prompt versioning** - Manage and version prompts in dashboard
+19. **Workers AI A/B testing** - Test different prompts and compare results

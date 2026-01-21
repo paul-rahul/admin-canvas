@@ -9,5 +9,5 @@ database_id = "9f56c3bd-29d6-4eda-8348-1f6c5ce79e64"
 migrations_dir = "migrations"
 
 # Workers AI binding (available in Pages Functions via env.AI)
-# Note: For local development, ensure Workers AI is enabled in your Cloudflare account
-# The binding is automatically available in production when Workers AI is enabled
+[ai]
+binding = "AI"
