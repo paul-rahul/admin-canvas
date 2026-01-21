@@ -12,6 +12,8 @@ import { formatPercent } from '@/lib/kpiUtils';
 import { AlertTriangle, TrendingDown, TrendingUp, Loader2, Info } from 'lucide-react';
 import { NeedsAttentionOverlay, buildNeedsAttentionData } from '@/components/dashboard/NeedsAttentionOverlay';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { serializeFiltersToSearch, DEFAULT_FILTERS, type TableFilters } from '@/utils/feedbackTableFilters';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 const Index = () => {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -31,6 +33,8 @@ const Index = () => {
   const [trendSelectionKey, setTrendSelectionKey] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const filterTimerRef = useRef<number | null>(null);
+  const [isCriticalTicketsOpen, setIsCriticalTicketsOpen] = useState(false);
+  const [criticalTicketsFilters, setCriticalTicketsFilters] = useState<TableFilters | null>(null);
   const defaultCustomRange = useCallback(() => {
     const now = new Date();
     return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), to: now };
@@ -315,7 +319,23 @@ const Index = () => {
     [needsAttentionData]
   );
   const insightsContent = useMemo(
-    () => <NeedsAttentionOverlay data={needsAttentionData} variant="insights" />,
+    () => (
+      <NeedsAttentionOverlay
+        data={needsAttentionData}
+        variant="insights"
+        onViewCriticalTickets={() => {
+          // Open View Tickets modal with filters for critical unresolved tickets from last 7 days
+          const filters: TableFilters = {
+            ...DEFAULT_FILTERS,
+            urgencies: ['critical'],
+            statuses: ['unresolved', 'in_progress'],
+            timePreset: '7d',
+          };
+          setCriticalTicketsFilters(filters);
+          setIsCriticalTicketsOpen(true);
+        }}
+      />
+    ),
     [needsAttentionData]
   );
 
@@ -477,6 +497,19 @@ const Index = () => {
         }
         onTimeRangeSelect={handleTrendRangeSelect}
       />
+      <Dialog open={isCriticalTicketsOpen} onOpenChange={setIsCriticalTicketsOpen}>
+        <DialogContent className="w-[90vw] max-w-none max-h-[80vh] overflow-hidden">
+          <FeedbackTable
+            key={criticalTicketsFilters?.urgencies?.join(',') ?? 'critical'}
+            feedback={feedback}
+            initialFiltersOverride={criticalTicketsFilters ?? undefined}
+            disableUrlSync
+            stickyTableHeader
+            containerClassName="flex flex-col max-h-[72vh]"
+            bodyScrollClassName="flex-1 overflow-y-auto"
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

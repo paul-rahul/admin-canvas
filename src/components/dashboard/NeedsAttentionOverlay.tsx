@@ -109,7 +109,7 @@ export function NeedsAttentionOverlay({
           <h3 className="text-lg font-semibold">{title}</h3>
         </div>
         {showAlerts && showInsights ? (
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
             <div className="rounded-xl border border-border/60 p-4">
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">Active Alerts</h4>
@@ -238,7 +238,7 @@ export function NeedsAttentionOverlay({
                           <TrendingDown className="h-3.5 w-3.5 text-success" />
                         );
                       return (
-                        <div key={theme.theme_id} className="rounded-lg border border-border/60 p-3">
+                        <div key={theme.theme_id} className="rounded-lg border-2 border-solid border-border p-3">
                           <div className="text-sm font-semibold text-foreground">{theme.name}</div>
                           <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                             <div className="inline-flex items-center gap-1 whitespace-nowrap">
@@ -397,7 +397,7 @@ export function NeedsAttentionOverlay({
                         <TrendingDown className="h-3.5 w-3.5 text-success" />
                       );
                     return (
-                      <div key={theme.theme_id} className="rounded-lg border border-border/60 p-3">
+                      <div key={theme.theme_id} className="rounded-lg border-2 border-solid border-border p-3">
                         <div className="text-sm font-semibold text-foreground">{theme.name}</div>
                         <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                           <div className="inline-flex items-center gap-1 whitespace-nowrap">

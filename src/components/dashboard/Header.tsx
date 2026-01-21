@@ -228,7 +228,7 @@ export function Header({
             {isOverlayOpen && needsAttentionContent && (
               <div
                 ref={overlayRef}
-                className="absolute right-0 top-full mt-2 w-[min(480px,96vw)] z-50"
+                className="absolute right-0 top-full mt-2 w-[min(1200px,96vw)] z-50"
               >
                 <div className="relative">
                   <Button

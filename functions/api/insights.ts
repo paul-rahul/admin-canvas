@@ -4,6 +4,13 @@ import { mockFeedback, FeedbackItem } from '../../src/data/mockFeedback';
 type PagesFunction = (args: { env: any; request: Request }) => Promise<Response>;
 type D1Database = any;
 
+// KV namespace type for caching
+type KVNamespace = {
+  get(key: string, options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' }): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
+};
+
 // Cloudflare Workers AI response structure
 // According to docs: chat models return { response: string }
 type AiBinding = {
@@ -19,6 +26,14 @@ type AiBinding = {
 };
 
 type FeedbackApiItem = Omit<FeedbackItem, 'timestamp'> & { timestamp: string };
+
+type InsightPayload = {
+  insights: Array<{ title: string; content: string; type: 'warning' | 'info' | 'success' }>;
+  summary?: string;
+  source?: 'ai' | 'fallback';
+  aiAvailable?: boolean;
+  aiError?: string;
+};
 
 const serializeFeedback = (items: FeedbackItem[]): FeedbackApiItem[] =>
   items.map((item) => ({
@@ -162,12 +177,32 @@ const parseAiPayload = (text: string) => {
       return null;
     }
     
-    // If no closing brace found, the JSON is incomplete - try to find where it cuts off
+    // If no closing brace found, the JSON is incomplete - try to recover partial JSON
     if (end === -1 || end <= start) {
-      console.warn('[AI Insights] No closing brace found - JSON appears incomplete');
+      console.warn('[AI Insights] No closing brace found - JSON appears incomplete/truncated');
       console.warn('[AI Insights] Response text (first 1000 chars):', text.substring(0, 1000));
       console.warn('[AI Insights] Response text (last 200 chars):', text.substring(Math.max(0, text.length - 200)));
-      return null;
+      
+      // Try to recover partial JSON by finding the last complete insight object
+      // Look for the last complete object with closing brace
+      let lastCompleteEnd = -1;
+      let braceDepth = 0;
+      for (let i = start; i < cleaned.length; i++) {
+        if (cleaned[i] === '{') braceDepth++;
+        if (cleaned[i] === '}') {
+          braceDepth--;
+          if (braceDepth === 0) {
+            lastCompleteEnd = i;
+          }
+        }
+      }
+      
+      if (lastCompleteEnd > start) {
+        console.warn('[AI Insights] Attempting to recover partial JSON ending at position:', lastCompleteEnd);
+        end = lastCompleteEnd;
+      } else {
+        return null; // Can't recover
+      }
     }
     
     const jsonStr = cleaned.slice(start, end + 1);
@@ -299,21 +334,21 @@ FEEDBACK SUMMARY:
 
 CRITICAL ISSUES:
 ${counts.criticalTitles.length > 0 
-  ? counts.criticalTitles.map((title, i) => `${i + 1}. ${title}`).join('\n')
+  ? counts.criticalTitles.slice(0, 5).map((title, i) => `${i + 1}. ${title}`).join('\n')
   : 'No critical issues currently'}
 
 RECENT NEGATIVE FEEDBACK:
 ${counts.recentNegativeTitles.length > 0
-  ? counts.recentNegativeTitles.map((title, i) => `${i + 1}. ${title}`).join('\n')
+  ? counts.recentNegativeTitles.slice(0, 5).map((title, i) => `${i + 1}. ${title}`).join('\n')
   : 'No recent negative feedback'}
 
 TASK: Generate exactly 4 concise, actionable insights that help product managers prioritize work and understand product health. Each insight should:
-1. Be specific and data-driven
+1. Be specific and data-driven with concrete numbers
 2. Highlight patterns, trends, or urgent issues
 3. Provide actionable recommendations when possible
 4. Use appropriate severity: "warning" for urgent issues, "info" for trends/patterns, "success" for opportunities
 
-IMPORTANT: You must return exactly 4 insights. Do not return fewer or more than 4.
+IMPORTANT: You must return exactly 4 insights. Each insight's content should be 1-2 sentences with specific data points.
 
 CRITICAL: You MUST return ONLY valid JSON. No markdown, no code blocks, no explanations, no text before or after the JSON.
 
@@ -322,23 +357,23 @@ Return ONLY this JSON structure (replace placeholders with actual values):
   "insights": [
     {
       "title": "Brief insight title",
-      "content": "Detailed explanation with numbers",
+      "content": "Detailed explanation with specific numbers and data points",
       "type": "warning"
     },
     {
       "title": "Brief insight title",
-      "content": "Detailed explanation with numbers",
+      "content": "Detailed explanation with specific numbers and data points",
       "type": "info"
     },
     {
       "title": "Brief insight title",
-      "content": "Detailed explanation with numbers",
+      "content": "Detailed explanation with specific numbers and data points",
       "type": "success"
     },
     {
       "title": "Brief insight title",
-      "content": "Detailed explanation with numbers",
-      "type": "warning"
+      "content": "Detailed explanation with specific numbers and data points",
+      "type": "info"
     }
   ],
   "summary": "One sentence summary"
@@ -444,15 +479,14 @@ Remember: Return ONLY the JSON object, nothing else.`;
       
       if (validInsights.length > 0) {
         console.log(`[AI Insights] Generated ${validInsights.length} valid insights`);
-        // Ensure we have exactly 4 insights (pad with defaults if needed, or trim if more)
+        // Ensure we have exactly 4 insights (trim if more, but don't pad with defaults - return what AI gave us)
         let finalInsights = validInsights;
-        if (validInsights.length < 4) {
-          console.warn(`[AI Insights] Only ${validInsights.length} insights received, padding to 4`);
-          const defaultResult = defaultInsights(items);
-          finalInsights = [...validInsights, ...defaultResult.insights.slice(validInsights.length, 4)];
-        } else if (validInsights.length > 4) {
+        if (validInsights.length > 4) {
           console.warn(`[AI Insights] ${validInsights.length} insights received, trimming to 4`);
           finalInsights = validInsights.slice(0, 4);
+        } else if (validInsights.length < 4) {
+          console.warn(`[AI Insights] Only ${validInsights.length} insights received from AI`);
+          // Don't pad with defaults - return what AI gave us, frontend will handle padding
         }
         return {
           insights: finalInsights,
@@ -499,18 +533,28 @@ Remember: Return ONLY the JSON object, nothing else.`;
   return { ...defaultResult, source: 'fallback', aiAvailable: true };
 };
 
-export const onRequest: PagesFunction = async ({ env }) => {
+// Cache configuration
+const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes cache TTL
+const CACHE_KEY = 'ai-insights:latest';
+
+export const onRequest: PagesFunction = async ({ env, request }) => {
   try {
     const db = env.ANALYTICS_DB as D1Database;
+    const kv = env.INSIGHTS_CACHE as KVNamespace | undefined;
+    
+    // Check if force regeneration is requested
+    const url = new URL(request.url);
+    const forceRegenerate = url.searchParams.get('force') === 'true';
 
     let items: FeedbackApiItem[] = [];
     
     if (db) {
       try {
-        const { results } = await db
+        const queryResult = await db
           .prepare('SELECT payload FROM feedback_entries')
-          .all<{ payload: string }>();
-
+          .all();
+        
+        const results = queryResult.results as Array<{ payload: string }> | undefined;
         items = (results?.map((row) => JSON.parse(row.payload)) ??
           []) as FeedbackApiItem[];
       } catch (dbError) {
@@ -520,16 +564,69 @@ export const onRequest: PagesFunction = async ({ env }) => {
     }
 
     // Fallback to mock data if DB is empty or unavailable
-    const sourceItems =
+    const allItems =
       items.length > 0 ? items : serializeFeedback(mockFeedback);
 
-    console.log(`[AI Insights] Processing ${sourceItems.length} feedback items`);
+    // Filter to last 7 days only for AI insights generation
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const sourceItems = allItems.filter((item) => {
+      const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 
+                       item.createdAt ? new Date(item.createdAt).getTime() : 
+                       now;
+      return timestamp >= sevenDaysAgo && timestamp <= now;
+    });
+
+    console.log(`[AI Insights] Processing ${sourceItems.length} feedback items (filtered to last 7 days from ${allItems.length} total)`);
+    
+    // Try to get cached insights first (only return cached AI insights, not fallback)
+    // Skip cache check if force regeneration is requested
+    if (!forceRegenerate && kv) {
+      try {
+        const cached = await kv.get(CACHE_KEY, { type: 'json' });
+        if (cached) {
+          const cachedData = cached as unknown as InsightPayload & { cachedAt?: number };
+          const cacheAge = cachedData.cachedAt ? now - cachedData.cachedAt : Infinity;
+          
+          // Only use cache if:
+          // 1. It's less than TTL old
+          // 2. It's AI-generated (not fallback)
+          if (cacheAge < CACHE_TTL_SECONDS * 1000 && cachedData.source === 'ai') {
+            console.log(`[AI Insights] Cache HIT - returning cached AI insights (age: ${Math.round(cacheAge / 1000)}s)`);
+            return new Response(JSON.stringify({
+              ...cachedData,
+              cached: true,
+              cacheAgeSeconds: Math.round(cacheAge / 1000),
+            }), {
+              headers: {
+                'content-type': 'application/json; charset=utf-8',
+                'cache-control': `public, max-age=${CACHE_TTL_SECONDS - Math.round(cacheAge / 1000)}`,
+              },
+            });
+          } else if (cachedData.source === 'fallback') {
+            console.log(`[AI Insights] Cache contains fallback data - ignoring and generating new insights`);
+          } else {
+            console.log(`[AI Insights] Cache EXPIRED - generating new insights (age: ${Math.round(cacheAge / 1000)}s)`);
+          }
+        } else {
+          console.log('[AI Insights] Cache MISS - generating new insights');
+        }
+      } catch (cacheError) {
+        console.warn('[AI Insights] Cache read error:', cacheError);
+        // Continue to generate new insights
+      }
+    } else {
+      if (forceRegenerate) {
+        console.log('[AI Insights] Force regeneration requested - skipping cache check');
+      } else {
+        console.log('[AI Insights] KV cache not available - generating new insights');
+      }
+    }
+
     console.log(`[AI Insights] AI binding available: ${!!env.AI}`);
     console.log(`[AI Insights] AI binding type: ${typeof env.AI}`);
-    console.log(`[AI Insights] All env keys: ${Object.keys(env).join(', ')}`);
     if (env.AI) {
       console.log(`[AI Insights] AI binding has run method: ${typeof (env.AI as any).run === 'function'}`);
-      console.log(`[AI Insights] AI binding methods: ${Object.keys(env.AI).join(', ')}`);
     } else {
       console.error('[AI Insights] CRITICAL: env.AI is undefined! AI binding not configured.');
       console.error('[AI Insights] For Cloudflare Pages, AI bindings must be configured in Dashboard:');
@@ -537,24 +634,60 @@ export const onRequest: PagesFunction = async ({ env }) => {
       console.error('[AI Insights] Set variable name to "AI" to match env.AI in code');
     }
 
+    console.log(`[AI Insights] Calling buildInsights with ${sourceItems.length} items, forceRegenerate: ${forceRegenerate}`);
     const insights = await buildInsights(env.AI as AiBinding | undefined, sourceItems);
+    console.log(`[AI Insights] buildInsights returned: source=${insights.source}, aiAvailable=${insights.aiAvailable}, insightsCount=${insights.insights?.length || 0}`);
 
-    return new Response(JSON.stringify(insights), {
+    // Store in cache ONLY if KV is available and insights are AI-generated (not fallback)
+    if (kv && insights.source === 'ai' && insights.aiAvailable !== false) {
+      try {
+        const cacheData = {
+          ...insights,
+          cachedAt: now,
+        };
+        await kv.put(CACHE_KEY, JSON.stringify(cacheData), {
+          expirationTtl: CACHE_TTL_SECONDS,
+        });
+        console.log('[AI Insights] Successfully cached AI-generated insights');
+        console.log('[AI Insights] Cache key:', CACHE_KEY);
+        console.log('[AI Insights] Cache TTL:', CACHE_TTL_SECONDS, 'seconds');
+      } catch (cacheError) {
+        console.error('[AI Insights] Cache write error:', cacheError);
+        console.error('[AI Insights] Cache error details:', {
+          message: cacheError instanceof Error ? cacheError.message : String(cacheError),
+          stack: cacheError instanceof Error ? cacheError.stack : undefined,
+        });
+        // Continue even if cache write fails
+      }
+    } else {
+      if (!kv) {
+        console.warn('[AI Insights] KV not available - skipping cache write');
+      } else if (insights.source !== 'ai') {
+        console.warn('[AI Insights] Insights are not AI-generated (source:', insights.source, ') - skipping cache write');
+      } else if (insights.aiAvailable === false) {
+        console.warn('[AI Insights] AI not available - skipping cache write');
+      }
+    }
+
+    return new Response(JSON.stringify({
+      ...insights,
+      cached: false,
+    }), {
       headers: {
         'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
+        'cache-control': `public, max-age=${CACHE_TTL_SECONDS}`,
       },
     });
   } catch (error) {
     console.error('[AI Insights] Fatal error:', error);
     // Return default insights even on fatal errors
     const defaultResult = defaultInsights(serializeFeedback(mockFeedback));
-    return new Response(JSON.stringify({ ...defaultResult, source: 'fallback', aiAvailable: false, aiError: 'Fatal error' }), {
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-      },
+    return new Response(JSON.stringify({ ...defaultResult, source: 'fallback', aiAvailable: false, aiError: 'Fatal error', cached: false }), {
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    },
       status: 200, // Return 200 even on error to show fallback insights
-    });
+  });
   }
 };
