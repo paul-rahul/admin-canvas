@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Themes from "./pages/Themes";
 import PmMetrics from "./pages/PmMetrics";
+import UserGuide from "./pages/UserGuide";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/themes" element={<Themes />} />
           <Route path="/pm-metrics" element={<PmMetrics />} />
+          <Route path="/user-guide" element={<UserGuide />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

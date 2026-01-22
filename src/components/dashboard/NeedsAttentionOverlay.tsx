@@ -187,7 +187,9 @@ export function NeedsAttentionOverlay({
               )}
             </div>
             <div className="space-y-2">
-              <AIInsights feedback={data.entries} compact />
+              <div className="w-full">
+                <AIInsights feedback={data.entries} compact />
+              </div>
               <div className={`rounded-xl border border-border/60 p-4 ${emergingCardClass}`}>
                 <div className="mb-3">
                   <div className="flex items-center gap-2">
@@ -346,7 +348,7 @@ export function NeedsAttentionOverlay({
           </div>
         ) : null}
         {!showAlerts && showInsights ? (
-          <div className="grid grid-cols-1 md:grid-cols-[5fr_6fr] gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-[7fr_13fr] gap-4">
             <div className={`rounded-xl border border-border/60 p-4 ${emergingCardClass}`}>
               <div className="mb-3">
                 <div className="flex items-center gap-2">

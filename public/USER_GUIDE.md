@@ -76,16 +76,25 @@ The header bar appears at the top of every page and contains:
   - **Business Metrics**: Product health analytics
 
 #### Right Section
-- **Refresh Button** (🔄): Manually refresh data from the server
+- **Refresh Button** (🔄): Refreshes the database and reloads data
+  - **Tooltip**: Hover to see "Click this button to refresh the database"
+  - **Functionality**: Clicking this button reseeds the D1 database with fresh mock data and then reloads all feedback data
+  - **Auto-Reseed**: The dashboard automatically checks if the database was last seeded more than 24 hours ago. If so, it automatically reseeds the database on page load to ensure data freshness
   - Shows last updated timestamp on hover
-  - Click to force a data refresh
 - **Insights Button** (💡): Opens AI-powered insights overlay
   - Shows emerging themes and patterns
-  - Displays AI-generated recommendations
+  - Displays AI-generated recommendations powered by Cloudflare Workers AI
+  - Insights are cached for 5 minutes using Cloudflare KV storage for fast retrieval
+  - Shows cache status and AI availability indicators
 - **Alerts Button** (🔔): Opens "Needs Attention" overlay
   - Shows count badge for active alerts
   - Displays critical and high-priority unresolved tickets
-- **User Guide Button** (📘): Opens user guide documentation in a new tab with blue background for easy identification
+- **User Guide Button** (📘): Opens user guide documentation in a new tab
+  - Features a fixed left sidebar with table of contents that stays visible while scrolling
+  - Table of contents automatically highlights the current section
+  - Click any TOC item to scroll to that section
+  - Includes a "Scroll to Top" button for easy navigation
+  - Blue background for easy identification
 
 ### Page Layout
 
@@ -324,20 +333,30 @@ Each alert shows comprehensive information:
 #### Emerging Issues Tab
 Shows trending issues that are increasing in frequency:
 
+**Layout**:
+- **Position**: Left panel in the AI Insights overlay (35% of overlay width)
+- **Card Design**: 2x2 grid layout showing four key categories
+- **Card Categories**: Performance, Bug, UX, and Feature
+- **Visual Design**: Each card has distinct colors, solid borders, and consistent height
+- **Height**: Cards automatically adjust to fit content with maximum height constraints
+
 **How Emerging Issues Are Identified**:
 - Analyzes feedback from the last 14 days to ensure accurate comparison
 - Compares feedback from the last 7 days to the previous 7 days (7-14 days ago)
 - Highlights issues that are growing significantly in volume, urgency, or negative sentiment
 - Shows you the growth rate and whether trends are improving or worsening
 - Recommends which team should handle each issue based on the type of problem
+- Uses advanced algorithms to detect statistically significant changes
 
 **Display Information**:
-- **Issue Type**: Category of the emerging issue (e.g., "Performance", "Bug")
+- **Issue Type**: Category of the emerging issue (e.g., "Performance", "Bug", "UX", "Feature")
+- **Count**: Number of tickets in this category from the last 7 days
 - **Trend Indicator**: 
   - ⬆️ Up arrow = Increasing frequency
   - ⬇️ Down arrow = Decreasing frequency
 - **Growth Rate**: Percentage change (e.g., "+25%", "-10%")
 - **Owner**: Suggested team owner (Engineering, Product, Support, Design)
+- **Visual Styling**: Each card has a distinct color scheme and solid 2px borders for clear separation
 - **Recent Count**: Number of tickets in recent period
 - **Previous Count**: Number of tickets in previous period (for comparison)
 
@@ -403,12 +422,22 @@ Each insight includes:
 - **Interactive Elements**: Critical Issues insight includes "View Tickets" button
 
 **How It Works**:
-- Automatically analyzes all your feedback data using Cloudflare Workers AI
-- Analyzes ticket volumes, sentiment distributions, urgency patterns, customer segments, and recent negative feedback
-- Identifies patterns and trends you might miss
-- Provides actionable recommendations based on data
-- Generates exactly 4 insights for consistent display
-- Updates as new feedback comes in
+- **AI-Powered Analysis**: Uses Cloudflare Workers AI to analyze feedback data
+- **Data Scope**: Analyzes only the last 7 days of feedback for focused, recent insights
+- **Analysis Dimensions**: Examines ticket volumes, sentiment distributions, urgency patterns, customer segments, and recent negative feedback
+- **Pattern Detection**: Identifies patterns and trends you might miss through manual review
+- **Actionable Recommendations**: Provides specific, data-driven recommendations
+- **Consistent Output**: Generates exactly 4 insights displayed in a 2x2 grid format
+- **Smart Caching**: Insights are cached using Cloudflare KV storage for 5 minutes to ensure fast loading
+  - Cache status is displayed in the info tooltip
+  - Fresh insights are generated automatically when cache expires
+  - "Generating insights..." message appears when new insights are being created
+
+**Status Indicators**:
+- **AI Generated** (Green badge): Insights successfully generated using Workers AI
+- **Fallback Mode** (Yellow badge): Using default insights when AI is unavailable or encounters errors
+- **AI Not Available** (Gray badge): AI binding not configured, using default insights
+- **Cache Status**: Info tooltip shows cache age and refresh timing
 
 **Always Available**:
 Even if advanced AI analysis isn't available, you'll still see valuable insights based on:
@@ -418,11 +447,13 @@ Even if advanced AI analysis isn't available, you'll still see valuable insights
 - Overall product health indicators
 
 **Interaction**:
-- **Hover Info Icon**: Learn how insights are generated
-- **Click "View Tickets"**: On Critical Issues insight, opens filtered ticket view
-- **Hover Insight Cards**: See additional context
-- **Refresh**: Click refresh button to update insights
-- **Auto-Update**: Insights refresh when data updates
+- **Hover Info Icon**: Learn how insights are generated, view AI status, and check cache information
+- **Click "View Tickets"**: On Critical Issues insight, opens a modal with filtered ticket view showing all critical unresolved tickets from the last 7 days
+  - Modal uses the same FeedbackTable component as the Business Metrics page
+  - Filters are pre-applied: Critical urgency, Unresolved/In Progress status, Last 7 days
+- **Hover Insight Cards**: See additional context and details
+- **Auto-Refresh**: Insights automatically refresh when the overlay is opened (if cache expired)
+- **Cache Behavior**: Cached insights load instantly; expired cache triggers new generation
 
 **Best Practices**:
 - Review insights daily for new patterns
@@ -939,6 +970,66 @@ Your filter settings are automatically saved in the web address:
 
 ---
 
+## Data Management & Auto-Refresh
+
+### Automatic Database Reseeding
+
+Cerebro includes an automatic data freshness mechanism to ensure you're always working with relevant data:
+
+**Auto-Reseed Logic**:
+- **Check Frequency**: Every time the dashboard loads
+- **Threshold**: If last seed was more than 24 hours ago
+- **Action**: Automatically reseeds the database with fresh mock data
+- **Storage**: Last seed timestamp stored in Cloudflare KV cache
+- **Transparency**: Reseed happens in background; you'll see loading indicators
+
+**Why Auto-Reseed?**:
+- Ensures data includes recent tickets (last 7 days, last 24 hours)
+- Maintains realistic date distributions
+- Keeps ticket status distributions current
+- Provides fresh data for accurate insights
+
+**Manual Reseed**:
+- Click the **Refresh Button** (🔄) in the header
+- Tooltip shows: "Click this button to refresh the database"
+- Immediately triggers reseed and data reload
+- Useful when you need fresh data on demand
+
+**Reseed Process**:
+1. Generates fresh mock data with current date ranges
+2. Clears existing database entries
+3. Inserts new entries in batches (respects rate limits)
+4. Stores seed timestamp in KV cache
+5. Reloads all feedback data in the UI
+6. Updates all charts, KPIs, and tables
+
+**Data Freshness Indicators**:
+- Last updated timestamp shown on refresh button hover
+- Loading indicators during reseed process
+- Automatic refresh of all dashboard components after reseed
+
+### AI Insights Caching
+
+**Cache Strategy**:
+- **Storage**: Cloudflare KV (Key-Value) storage
+- **TTL**: 1 hour (3600 seconds)
+- **Scope**: Only AI-generated insights are cached (not fallback insights)
+- **Refresh**: Automatically generates new insights when cache expires
+
+**Cache Behavior**:
+- **Cache Hit**: Instant loading of insights (no API call)
+- **Cache Miss**: Generates new insights using Workers AI
+- **Cache Expired**: Automatically refreshes on overlay open
+- **Status Display**: Cache age shown in info tooltip
+
+**Benefits**:
+- Fast loading times for frequently accessed insights
+- Reduced API calls and costs
+- Better user experience with instant results
+- Automatic refresh ensures insights stay current
+
+---
+
 ## Advanced Features
 
 ### Issue Trend Modal
@@ -1252,10 +1343,23 @@ All your filter settings are automatically saved in the web address, making it e
 1. **Cerebro Logo**: Navigate to Overview
 2. **Overview Link**: Navigate to Overview
 3. **Business Metrics Link**: Navigate to Business Metrics
-4. **Refresh Button**: Reload data
-5. **Insights Button**: Open insights overlay
+4. **Refresh Button**: Reseed database and reload all data
+   - Hover to see tooltip: "Click this button to refresh the database"
+   - Clicking triggers database reseed with fresh mock data
+   - After reseed completes, all feedback data is automatically reloaded
+   - Last seed timestamp is stored in cache for auto-reseed checks
+5. **Insights Button**: Open AI-powered insights overlay
+   - Shows AI-generated insights using Cloudflare Workers AI
+   - Displays cache status and AI availability
+   - Automatically refreshes if cache expired
 6. **Alerts Button**: Open needs attention overlay
-7. **Help Button**: Open help documentation
+   - Shows count badge for active alerts
+   - Displays critical and high-priority unresolved tickets
+7. **User Guide Button**: Open comprehensive user guide in new tab
+   - Fixed left sidebar with table of contents
+   - Auto-highlighting of current section
+   - Click-to-scroll navigation
+   - Scroll-to-top button
 
 ### Keyboard Interactions
 

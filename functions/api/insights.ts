@@ -534,7 +534,7 @@ Remember: Return ONLY the JSON object, nothing else.`;
 };
 
 // Cache configuration
-const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes cache TTL
+const CACHE_TTL_SECONDS = 60 * 60; // 1 hour cache TTL
 const CACHE_KEY = 'ai-insights:latest';
 
 export const onRequest: PagesFunction = async ({ env, request }) => {

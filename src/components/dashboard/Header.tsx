@@ -198,7 +198,7 @@ export function Header({
             {isInsightsOpen && insightsContent && (
               <div
                 ref={insightsRef}
-                className="absolute right-0 top-full mt-2 w-[min(1050px,92vw)] z-50"
+                className="absolute right-0 top-full mt-2 w-[85vw] z-50"
               >
                 <div className="relative">
                   <Button

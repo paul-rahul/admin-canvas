@@ -256,11 +256,11 @@ function AIInsightsComponent({ feedback, compact = false, onViewCriticalTickets 
         hasInsights: !!serverInsights?.insights?.length 
       });
       
-      // Only skip if we have FRESH cached AI insights (cached and less than 5 min old)
+      // Only skip if we have FRESH cached AI insights (cached and less than 1 hour old)
       // If cache is empty or expired, we need to call the API
       if (serverInsights?.source === 'ai' && serverInsights?.cached && serverInsights?.cacheAgeSeconds !== undefined) {
         const cacheAge = serverInsights.cacheAgeSeconds;
-        if (cacheAge < 300) { // Less than 5 minutes (300 seconds)
+        if (cacheAge < 3600) { // Less than 1 hour (3600 seconds)
           console.log(`[AI Insights] Using cached AI insights (age: ${cacheAge}s), skipping API call`);
           return;
         } else {
