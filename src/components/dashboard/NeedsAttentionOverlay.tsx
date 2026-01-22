@@ -217,7 +217,7 @@ export function NeedsAttentionOverlay({
                   <p className="text-xs text-muted-foreground">Last 7 days only</p>
                 </div>
                 {emerging.length ? (
-                  <div className="grid gap-3 max-h-[360px] overflow-y-auto pr-1 md:grid-cols-2">
+                  <div className="grid gap-3 max-h-[420px] overflow-y-auto pr-1 md:grid-cols-2">
                     {emerging.slice(0, 4).map((theme) => {
                       const mentionDeltaPercent =
                         theme.prevCount > 0
@@ -376,7 +376,7 @@ export function NeedsAttentionOverlay({
                 <p className="text-xs text-muted-foreground">Last 7 days only</p>
               </div>
               {emerging.length ? (
-                <div className="grid gap-3 max-h-[240px] overflow-y-auto pr-1 md:grid-cols-2">
+                <div className="grid gap-3 max-h-[280px] overflow-y-auto pr-1 md:grid-cols-2">
                   {emerging.slice(0, 4).map((theme) => {
                     const mentionDeltaPercent =
                       theme.prevCount > 0

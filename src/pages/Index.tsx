@@ -228,9 +228,35 @@ const Index = () => {
     }
   }, []);
 
-  useEffect(() => {
-    void loadFeedback();
+  const checkAndReseedIfNeeded = useCallback(async () => {
+    try {
+      // Check last seed time from cache
+      const seedCheckResponse = await fetch('/api/seed-check');
+      if (seedCheckResponse.ok) {
+        const seedCheck = await seedCheckResponse.json();
+        if (seedCheck.shouldReseed) {
+          console.log('[Index] Last seed was more than 24 hours ago, auto-reseeding database');
+          const seedResponse = await fetch('/api/seed', { method: 'POST' });
+          if (seedResponse.ok) {
+            const seedResult = await seedResponse.json();
+            console.log('[Index] Auto-reseed completed:', seedResult);
+          }
+        } else {
+          console.log('[Index] Database is fresh, no reseed needed');
+        }
+      }
+    } catch (error) {
+      console.error('[Index] Error checking/reseeding database:', error);
+    }
   }, []);
+
+  useEffect(() => {
+    // Check and reseed if needed on page load
+    void checkAndReseedIfNeeded().then(() => {
+      // Load feedback after reseed check
+      void loadFeedback();
+    });
+  }, [checkAndReseedIfNeeded, loadFeedback]);
 
   useEffect(() => {
     return () => {
@@ -300,8 +326,21 @@ const Index = () => {
     [markFiltering, normalizeRange]
   );
 
-  const handleRefresh = useCallback(() => {
-    void loadFeedback();
+  const handleRefresh = useCallback(async () => {
+    try {
+      // Reseed the database when refresh button is clicked
+      console.log('[Index] Refresh button clicked, reseeding database');
+      const seedResponse = await fetch('/api/seed', { method: 'POST' });
+      if (seedResponse.ok) {
+        const seedResult = await seedResponse.json();
+        console.log('[Index] Database reseeded:', seedResult);
+      }
+    } catch (error) {
+      console.error('[Index] Error reseeding database:', error);
+    } finally {
+      // Reload feedback after reseed
+      void loadFeedback();
+    }
   }, [loadFeedback]);
 
 

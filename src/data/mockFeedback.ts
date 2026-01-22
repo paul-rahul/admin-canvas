@@ -429,7 +429,7 @@ export const migrateTicket = (old: OldTicket, options?: { forcedTags?: string[];
   };
 };
 
-const buildMockFeedback = (): TicketRecord[] => {
+export const buildMockFeedback = (): TicketRecord[] => {
   const items: TicketRecord[] = [];
   const now = Date.now();
   const totalEntries = 6000;
@@ -733,12 +733,25 @@ const buildMockFeedback = (): TicketRecord[] => {
     return roll < 0.45 ? 'engineering' : roll < 0.85 ? 'product' : 'support';
   };
 
-  const pickStatus = (ageDays: number, urgency: Urgency) => {
+  const pickStatus = (ageDays: number, urgency: Urgency, isInLast24h: boolean, isInLast7d: boolean) => {
     let unresolved = 0.4;
     let inProgress = 0.3;
     let resolved = 0.25;
     let ignored = 0.05;
-    if (ageDays > 60) {
+    
+    // Ensure last 24h has mix of resolved and unresolved
+    if (isInLast24h) {
+      unresolved = 0.35;
+      inProgress = 0.25;
+      resolved = 0.35; // Ensure 35% are resolved in last 24h
+      ignored = 0.05;
+    } else if (isInLast7d) {
+      // Ensure last 7d has good mix
+      unresolved = 0.3;
+      inProgress = 0.3;
+      resolved = 0.35; // Ensure 35% are resolved in last 7d
+      ignored = 0.05;
+    } else if (ageDays > 60) {
       unresolved = 0.2;
       inProgress = 0.1;
       resolved = 0.6;
@@ -754,6 +767,7 @@ const buildMockFeedback = (): TicketRecord[] => {
       resolved = 0.35;
       ignored = 0.05;
     }
+    
     if (urgency === 'critical') {
       unresolved += 0.15;
       resolved -= 0.1;
@@ -775,10 +789,11 @@ const buildMockFeedback = (): TicketRecord[] => {
     // Adjust urgency for emerging issue types in recent periods to create urgency escalation
     const isEmergingType = emergingIssueTypes.includes(issueType);
     const ageDays = Math.max(0, (now - timestampMs) / dayMs);
-    const isInLast7d = ageDays <= 7;
+    const isInLast24h = ageDays <= 1;
+    const isInLast7d = ageDays <= 7 && ageDays > 1;
     const isInLast14d = ageDays <= 14 && ageDays > 7;
     
-    if (isEmergingType && isInLast7d) {
+    if (isEmergingType && (isInLast24h || isInLast7d)) {
       // Boost urgency for emerging types in last 7 days
       const roll = nextRandom();
       if (roll < 0.3 && urgency === 'low') {
@@ -821,7 +836,7 @@ const buildMockFeedback = (): TicketRecord[] => {
       .replace('{keywords}', keywordText);
     const content = `${description} Please prioritize.`;
     const timestamp = new Date(timestampMs);
-    const status = pickStatus(ageDays, urgency);
+    const status = pickStatus(ageDays, urgency, isInLast24h, isInLast7d);
     const owner = pickOwner(issueType);
     const oldTicket: OldTicket = {
       id: `${source}-${issueType}-${i}`,
@@ -911,7 +926,7 @@ const validateMockFeedback = (items: TicketRecord[]) => {
   }
 };
 
-const buildFeedbackWithDates = (items: TicketRecord[]): FeedbackItem[] =>
+export const buildFeedbackWithDates = (items: TicketRecord[]): FeedbackItem[] =>
   items.map((item) => ({
     ...item,
     timestamp: new Date(item.createdAt),

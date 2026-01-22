@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { NavLink } from '@/components/NavLink';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -138,14 +139,23 @@ export function Header({
               {lastUpdatedAt ? format(lastUpdatedAt, 'MM/dd/yyyy HH:mm') : '—'}
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            className="relative"
-          >
-            <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefresh}
+                  className="relative"
+                >
+                  <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Click this button to refresh the database</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="flex items-center gap-4">
@@ -228,7 +238,7 @@ export function Header({
             {isOverlayOpen && needsAttentionContent && (
               <div
                 ref={overlayRef}
-                className="absolute right-0 top-full mt-2 w-[min(1200px,96vw)] z-50"
+                className="absolute right-0 top-full mt-2 w-[min(480px,96vw)] z-50"
               >
                 <div className="relative">
                   <Button
