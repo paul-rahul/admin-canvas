@@ -4,7 +4,7 @@
 
 See [FRICTION_LOG.md](./FRICTION_LOG.md) for a detailed log of issues encountered during development and deployment, including Workers AI integration challenges.
 
-- Project name: Cerebro
+- Project name: Cloudflare-cerebro
 - One-line goal: A product feedback dashboard with an Overview (triage) page and a Business Metrics page for longitudinal product health signals, backed by mock data and Cloudflare Workers/Pages APIs.
 - Explicit non-goals / out-of-scope items:
   - No real third-party integrations (all data is mock in this codebase).
@@ -28,7 +28,7 @@ See [FRICTION_LOG.md](./FRICTION_LOG.md) for a detailed log of issues encountere
 
 # Architecture
 - High-level components:
-  - Frontend SPA (React/Vite) with routes: Overview (`/`), Business Metrics (`/pm-metrics`), Themes (`/themes`), NotFound
+  - Frontend SPA (React/Vite) with routes: Overview (`/`), Business Metrics (`/business-metrics`), Themes (`/themes`), NotFound
   - Shared topbar (`Header`) with refresh, bell overlay (Needs Attention), Insights overlay, Help Center
   - Mock data generator and schema (`src/data/mockFeedback.ts`)
   - Filtering logic for View Tickets (`src/utils/feedbackTableFilters.ts`)
@@ -155,7 +155,7 @@ See [FRICTION_LOG.md](./FRICTION_LOG.md) for a detailed log of issues encountere
 - `src/App.tsx`
   - Purpose: Router configuration and providers.
   - Key functions / classes / exports: default `App` component.
-  - Critical assumptions or invariants: Routes are `/`, `/themes`, `/pm-metrics`, `*`.
+  - Critical assumptions or invariants: Routes are `/`, `/themes`, `/business-metrics`, `*`.
 - `src/App.css`
   - Purpose: App-level styling.
   - Key functions / classes / exports: N/A

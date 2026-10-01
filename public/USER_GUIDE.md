@@ -1,6 +1,6 @@
-# Cerebro User Guide
+# Cloudflare-cerebro User Guide
 
-Welcome to **Cerebro**, your comprehensive product feedback dashboard. This guide will help you navigate and utilize all features to effectively triage feedback, monitor product health, and make data-driven decisions.
+Welcome to **Cloudflare-cerebro**, your comprehensive product feedback dashboard. This guide will help you navigate and utilize all features to effectively triage feedback, monitor product health, and make data-driven decisions.
 
 ---
 
@@ -25,9 +25,9 @@ Welcome to **Cerebro**, your comprehensive product feedback dashboard. This guid
 
 ## Getting Started
 
-### What is Cerebro?
+### What is Cloudflare-cerebro?
 
-Cerebro is a product feedback dashboard designed to help product teams:
+Cloudflare-cerebro is a product feedback dashboard designed to help product teams:
 - **Triage** incoming feedback efficiently
 - **Monitor** product health signals over time
 - **Identify** emerging issues and trends
@@ -55,7 +55,7 @@ Cerebro is a product feedback dashboard designed to help product teams:
 
 ### First-Time Setup
 
-1. **Open the Dashboard**: Access Cerebro through your organization's provided link
+1. **Open the Dashboard**: Access Cloudflare-cerebro through your organization's provided link
 2. **Wait for Data**: The dashboard will automatically load your feedback data (you'll see a loading indicator)
 3. **Start with Overview**: The Overview page gives you an immediate snapshot of your product's feedback health
 4. **Check Urgent Items**: Click the bell icon (🔔) in the top right to see critical issues that need attention
@@ -70,7 +70,7 @@ Cerebro is a product feedback dashboard designed to help product teams:
 The header bar appears at the top of every page and contains:
 
 #### Left Section
-- **Cerebro Logo**: Click to return to the Overview page
+- **Cloudflare-cerebro Logo**: Click to return to the Overview page
 - **Navigation Links**:
   - **Overview**: Main triage dashboard
   - **Business Metrics**: Product health analytics
@@ -465,12 +465,12 @@ Even if advanced AI analysis isn't available, you'll still see valuable insights
 
 ## Business Metrics Page
 
-The Business Metrics page (`/pm-metrics`) provides longitudinal analysis of product health signals.
+The Business Metrics page (`/business-metrics`) provides longitudinal analysis of product health signals.
 
 ### Accessing Business Metrics
 
 1. Click **"Business Metrics"** in the header navigation
-2. Or navigate directly to `/pm-metrics`
+2. Or navigate directly to `/business-metrics`
 
 ### Page Layout
 
@@ -974,7 +974,7 @@ Your filter settings are automatically saved in the web address:
 
 ### Automatic Database Reseeding
 
-Cerebro includes an automatic data freshness mechanism to ensure you're always working with relevant data:
+Cloudflare-cerebro includes an automatic data freshness mechanism to ensure you're always working with relevant data:
 
 **Auto-Reseed Logic**:
 - **Check Frequency**: Every time the dashboard loads
@@ -1340,7 +1340,7 @@ All your filter settings are automatically saved in the web address, making it e
 
 #### Header
 
-1. **Cerebro Logo**: Navigate to Overview
+1. **Cloudflare-cerebro Logo**: Navigate to Overview
 2. **Overview Link**: Navigate to Overview
 3. **Business Metrics Link**: Navigate to Business Metrics
 4. **Refresh Button**: Reseed database and reload all data
@@ -2064,7 +2064,7 @@ A: Data refreshes on page load and when you click the refresh button. Real-time 
 A: No, tickets are read-only in the current version. Editing capabilities may be added in future versions.
 
 **Q: How do I add new tickets?**
-A: Tickets are created through external systems (Support, Discord, GitHub, etc.) and automatically appear in Cerebro.
+A: Tickets are created through external systems (Support, Discord, GitHub, etc.) and automatically appear in Cloudflare-cerebro.
 
 **Q: Can I customize the dashboard?**
 A: Limited customization is available through filters and views. Full customization is not currently supported.
@@ -2137,30 +2137,30 @@ These colors are designed to be easily distinguishable and consistent across all
 
 #### Integration Questions
 
-**Q: Can I connect Cerebro to JIRA?**
+**Q: Can I connect Cloudflare-cerebro to JIRA?**
 A: Tickets display JIRA links when available. For full integration capabilities, contact your administrator.
 
 **Q: Can I get notifications in Slack or email?**
-A: Alerts are available in the Needs Attention overlay within Cerebro. For external notifications, check with your administrator about available options.
+A: Alerts are available in the Needs Attention overlay within Cloudflare-cerebro. For external notifications, check with your administrator about available options.
 
-**Q: Can I connect other tools to Cerebro?**
+**Q: Can I connect other tools to Cloudflare-cerebro?**
 A: Integration options depend on your organization's setup. Contact your administrator to discuss available integrations.
 
-**Q: Can I integrate Cerebro with other tools?**
+**Q: Can I integrate Cloudflare-cerebro with other tools?**
 A: Integration capabilities depend on your organization's setup. Contact your administrator for integration options.
 
 #### Technical Questions
 
 **Q: What browsers can I use?**
-A: Cerebro works with all modern web browsers including Chrome, Firefox, Safari, and Edge.
+A: Cloudflare-cerebro works with all modern web browsers including Chrome, Firefox, Safari, and Edge.
 
 **Q: Do I need to install anything?**
-A: No installation needed. Simply open Cerebro in your web browser.
+A: No installation needed. Simply open Cloudflare-cerebro in your web browser.
 
 **Q: Is my data secure?**
 A: Data security follows your organization's policies. Contact your IT team if you have specific security concerns.
 
-**Q: Can I use Cerebro without internet?**
+**Q: Can I use Cloudflare-cerebro without internet?**
 A: No, an internet connection is required to access the latest feedback data.
 
 **Q: Are there keyboard shortcuts?**
@@ -2832,4 +2832,4 @@ When you apply filters, the web address automatically updates. Here are examples
 
 ---
 
-**Thank you for using Cerebro!** We hope this comprehensive guide helps you effectively manage product feedback and make data-driven decisions. For the latest updates and features, check the version history section.
+**Thank you for using Cloudflare-cerebro!** We hope this comprehensive guide helps you effectively manage product feedback and make data-driven decisions. For the latest updates and features, check the version history section.

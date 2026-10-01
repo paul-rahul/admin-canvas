@@ -111,7 +111,7 @@ export function Header({
               className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
               activeClassName="text-foreground"
             >
-              <h1 className="text-xl font-bold">Cerebro</h1>
+              <h1 className="text-xl font-bold">Cloudflare-cerebro</h1>
             </NavLink>
           </div>
           <nav className="hidden md:flex items-center gap-3 text-sm text-muted-foreground">
@@ -123,7 +123,7 @@ export function Header({
               Overview
             </NavLink>
             <NavLink
-              to="/pm-metrics"
+              to="/business-metrics"
               className="px-2 py-1 rounded-md hover:text-foreground hover:bg-muted/30 transition"
               activeClassName="text-foreground bg-muted/40"
             >
