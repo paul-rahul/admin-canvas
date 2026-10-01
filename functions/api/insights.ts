@@ -18,8 +18,9 @@ type AiBinding = {
     model: string,
     options: {
       messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      max_tokens?: number;
     }
-  ) => Promise<{ 
+  ) => Promise<{
     response?: string;  // Primary response text
     [key: string]: any; // Allow other properties
   }>;
@@ -390,6 +391,8 @@ Remember: Return ONLY the JSON object, nothing else.`;
         },
         { role: 'user', content: prompt },
       ],
+      // Workers AI defaults to 256 output tokens, which cuts the four-insight JSON off mid-object.
+      max_tokens: 1024,
     });
     
     // Log the full result structure for debugging
