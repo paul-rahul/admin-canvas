@@ -27,7 +27,7 @@ export const onRequest: PagesFunction = async ({ env }) => {
     // Try a simple test call
     if (hasRunMethod) {
       try {
-        testResult = await ai.run('@cf/meta/llama-3-8b-instruct', {
+        testResult = await ai.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
           messages: [
             { role: 'system', content: 'You are a test API. Respond with only: OK' },
             { role: 'user', content: 'Test' },

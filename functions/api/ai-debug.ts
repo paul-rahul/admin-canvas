@@ -50,7 +50,7 @@ export const onRequest: PagesFunction = async ({ env }) => {
     if (env.AI) {
       try {
         // Make a simple test call to see what we get back
-        const result = await (env.AI as AiBinding).run('@cf/meta/llama-3-8b-instruct', {
+        const result = await (env.AI as AiBinding).run('@cf/meta/llama-3.1-8b-instruct-fp8', {
           messages: [
             { 
               role: 'system', 

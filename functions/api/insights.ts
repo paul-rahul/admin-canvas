@@ -382,7 +382,7 @@ Return ONLY this JSON structure (replace placeholders with actual values):
 Remember: Return ONLY the JSON object, nothing else.`;
 
   try {
-    const result = await ai.run('@cf/meta/llama-3-8b-instruct', {
+    const result = await ai.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [
         { 
           role: 'system', 
