@@ -5,6 +5,8 @@
 See [FRICTION_LOG.md](./FRICTION_LOG.md) for a detailed log of issues encountered during development and deployment, including Workers AI integration challenges.
 
 - Project name: Cloudflare-cerebro
+- Live: https://cloudflare-cerebro.rahulpaul.net (GitHub: `paul-rahul/cloudflare-cerebro`)
+- Cloudflare Pages project: `admin-canvas` (internal name, unchanged so Git integration and the D1 / Workers AI / KV bindings stay intact; `admin-canvas.pages.dev` remains as a fallback)
 - One-line goal: A product feedback dashboard with an Overview (triage) page and a Business Metrics page for longitudinal product health signals, backed by mock data and Cloudflare Workers/Pages APIs.
 - Explicit non-goals / out-of-scope items:
   - No real third-party integrations (all data is mock in this codebase).
